@@ -1,0 +1,225 @@
+{% extends "base_admin.html" %}
+{% block title %}Berichten – Stadsspel Aalst{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-4">
+  <div>
+    <h2 class="fw-bold mb-0">Berichten</h2>
+    <p class="text-muted mb-0">Stuur berichten naar teams en bekijk hun antwoorden.</p>
+  </div>
+  {% if total_unread > 0 %}
+  <span class="ms-auto badge bg-danger fs-6 px-3 py-2">{{ total_unread }} ongelezen</span>
+  {% endif %}
+</div>
+
+<div class="row g-3" style="height: calc(100vh - 180px); min-height: 400px;">
+
+  <!-- Team list -->
+  <div class="col-md-4" style="height:100%; overflow-y:auto;">
+    {% if teams %}
+      {% for team in teams %}
+      <a href="{{ url_for('admin_messages', team_id=team.id) }}"
+         class="d-block text-decoration-none mb-2">
+        <div class="card {% if selected_team and selected_team.id == team.id %}border-primary{% endif %}"
+             style="border-left: 4px solid {{ team.color }} !important;">
+          <div class="card-body p-3">
+            <div class="d-flex align-items-center">
+              <span class="fw-bold" style="color:{{ team.color }}">{{ team.name }}</span>
+              {% set unread = team.unread_from_team %}
+              {% if unread > 0 %}
+              <span class="badge bg-danger ms-2">{{ unread }}</span>
+              {% endif %}
+              <span class="ms-auto text-muted small">{{ team.members|length }} leden</span>
+            </div>
+            {% set last_msg = team.messages[-1] if team.messages else none %}
+            {% if last_msg %}
+            <div class="text-muted small mt-1 text-truncate" style="max-width:220px;">
+              {% if last_msg.sender_type == 'admin' %}🧑‍💼{% else %}👥{% endif %}
+              {{ last_msg.content or '📷 Foto' }}
+            </div>
+            <div class="text-muted" style="font-size:.7rem;">{{ last_msg.sent_at.strftime('%H:%M') }}</div>
+            {% else %}
+            <div class="text-muted small mt-1">Geen berichten</div>
+            {% endif %}
+          </div>
+        </div>
+      </a>
+      {% endfor %}
+    {% else %}
+      <div class="card">
+        <div class="card-body text-center p-4">
+          <div class="fs-2 mb-2">👥</div>
+          <p class="text-muted small">Geen teams aangemaakt.</p>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- Conversation -->
+  <div class="col-md-8 d-flex flex-column" style="height:100%;">
+    {% if selected_team %}
+    <div class="card flex-fill d-flex flex-column" style="overflow:hidden;">
+      <!-- Chat header -->
+      <div class="card-header d-flex align-items-center gap-2 py-2"
+           style="background:{{ selected_team.color }}; border:none;">
+        <span class="fw-bold text-white">{{ selected_team.name }}</span>
+        <span class="badge ms-auto" style="background:rgba(255,255,255,.25); color:#fff;">
+          {{ selected_team.members|length }} leden
+        </span>
+        <button class="btn btn-sm" style="background:rgba(255,255,255,.2);color:#fff;"
+                onclick="location.reload()">
+          ↻
+        </button>
+      </div>
+
+      <!-- Messages -->
+      <div class="card-body flex-fill overflow-auto p-3 d-flex flex-column gap-2"
+           id="conversationArea"
+           style="background:#f8f9fa;">
+        {% if conversation %}
+          {% for msg in conversation %}
+          <div class="d-flex flex-column align-items-{% if msg.sender_type == 'admin' %}end{% else %}start{% endif %}">
+            <div class="px-3 py-2 rounded-3 shadow-sm"
+                 style="max-width:70%; word-break:break-word;
+                 background:{% if msg.sender_type == 'admin' %}{{ selected_team.color }}{% else %}#fff{% endif %};
+                 color:{% if msg.sender_type == 'admin' %}#fff{% else %}#1a1a2e{% endif %};">
+              {% if msg.sender_type == 'team' %}
+              <div style="font-size:.7rem; opacity:.6; margin-bottom:.2rem;">{{ msg.sender_name }}</div>
+              {% endif %}
+              {% if msg.content %}
+              <div>{{ msg.content }}</div>
+              {% endif %}
+              {% if msg.photo_filename %}
+              <img src="{{ url_for('uploaded_file', filename=msg.photo_filename) }}"
+                   alt="foto"
+                   style="max-width:200px; border-radius:8px; margin-top:.3rem; cursor:pointer; display:block;"
+                   onclick="openLightbox(this.src)">
+              {% endif %}
+              <div style="font-size:.7rem; opacity:.6; margin-top:.2rem; text-align:right;">
+                {{ msg.sent_at.strftime('%H:%M') }}
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="text-center text-muted my-auto">
+            <div class="fs-2 mb-2">💬</div>
+            <p class="small">Nog geen berichten met {{ selected_team.name }}.</p>
+          </div>
+        {% endif %}
+      </div>
+
+      <!-- Input -->
+      <div class="card-footer p-3 bg-white border-top">
+        <form method="POST" action="{{ url_for('admin_send_message') }}"
+              enctype="multipart/form-data">
+          <input type="hidden" name="team_id" value="{{ selected_team.id }}">
+          <div id="photoPreviewWrap" style="display:none; margin-bottom:.5rem;">
+            <div style="position:relative;display:inline-block;">
+              <img id="photoPreview" src="" alt=""
+                   style="max-height:80px;border-radius:8px;">
+              <button type="button"
+                      style="position:absolute;top:-6px;right:-6px;background:#e74c3c;color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:.7rem;cursor:pointer;"
+                      onclick="removePhoto()">✕</button>
+            </div>
+          </div>
+          <div class="d-flex gap-2 align-items-end">
+            <textarea name="content" class="form-control" rows="1" id="adminTextarea"
+                      placeholder="Typ een bericht naar {{ selected_team.name }}…"
+                      style="resize:none; border-radius:12px;"
+                      oninput="autoResize(this)"></textarea>
+            <input type="file" name="photo" id="photoInput" accept="image/*"
+                   style="display:none" onchange="previewPhoto(this)">
+            <button type="button" class="btn btn-outline-secondary rounded-3 flex-shrink-0"
+                    onclick="document.getElementById('photoInput').click()"
+                    title="Foto bijvoegen">
+              📷
+            </button>
+            <button type="submit" class="btn rounded-3 flex-shrink-0 fw-semibold"
+                    style="background:{{ selected_team.color }};color:#fff; white-space:nowrap;">
+              Verstuur ➤
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    {% else %}
+    <div class="card flex-fill">
+      <div class="card-body d-flex align-items-center justify-content-center text-center p-5">
+        <div>
+          <div class="fs-1 mb-3">💬</div>
+          <h5 class="text-muted">Selecteer een team</h5>
+          <p class="text-muted small">Klik op een team links om de conversatie te openen.</p>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<!-- Lightbox -->
+<div id="lightbox" onclick="closeLightbox()"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:1000;align-items:center;justify-content:center;">
+  <img id="lightboxImg" src="" alt="" style="max-width:90vw;max-height:90vh;border-radius:8px;">
+  <button onclick="closeLightbox()"
+          style="position:absolute;top:1rem;right:1rem;background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:50%;width:36px;height:36px;font-size:1.1rem;">✕</button>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function openLightbox(src) {
+  const lb = document.getElementById('lightbox');
+  document.getElementById('lightboxImg').src = src;
+  lb.style.display = 'flex';
+}
+function closeLightbox() {
+  document.getElementById('lightbox').style.display = 'none';
+}
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+function previewPhoto(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('photoPreview').src = e.target.result;
+    document.getElementById('photoPreviewWrap').style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+function removePhoto() {
+  document.getElementById('photoInput').value = '';
+  document.getElementById('photoPreview').src = '';
+  document.getElementById('photoPreviewWrap').style.display = 'none';
+}
+// Scroll conversation to bottom
+const area = document.getElementById('conversationArea');
+if (area) area.scrollTop = area.scrollHeight;
+
+// Enter to send (Shift+Enter for newline)
+document.getElementById('adminTextarea')?.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    e.target.closest('form').submit();
+  }
+});
+
+// Auto-refresh unread badges every 10s
+setInterval(async () => {
+  try {
+    const res = await fetch('{{ url_for("admin_messages_unread") }}');
+    const data = await res.json();
+    // Update team list badges dynamically would need more DOM work; simple page reload if new messages
+    const total = data.total;
+    if (total > 0) {
+      document.title = `(${total}) Berichten – Stadsspel Aalst`;
+    }
+  } catch(e) {}
+}, 10000);
+</script>
+{% endblock %}

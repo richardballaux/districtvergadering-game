@@ -1,0 +1,161 @@
+{% extends "base_admin.html" %}
+{% block title %}Dashboard – Stadsspel Aalst{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-4">
+  <div>
+    <h2 class="fw-bold mb-0">Dashboard</h2>
+    <p class="text-muted mb-0">Overzicht stadsspel Hopmarkt Aalst</p>
+  </div>
+  <div class="ms-auto">
+    {% if settings.game_started %}
+    <span class="badge bg-success fs-6 px-3 py-2"><i class="bi bi-play-fill me-1"></i>Spel actief</span>
+    {% else %}
+    <span class="badge bg-secondary fs-6 px-3 py-2"><i class="bi bi-pause-fill me-1"></i>Spel niet gestart</span>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Stats row -->
+<div class="row g-3 mb-4">
+  <div class="col-sm-6 col-xl-3">
+    <div class="card h-100 p-3">
+      <div class="d-flex align-items-center gap-3">
+        <div class="fs-2">👥</div>
+        <div>
+          <div class="fs-4 fw-bold">{{ participant_count }}</div>
+          <div class="text-muted small">Deelnemers</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="card h-100 p-3">
+      <div class="d-flex align-items-center gap-3">
+        <div class="fs-2">🏳️</div>
+        <div>
+          <div class="fs-4 fw-bold">{{ team_count }}</div>
+          <div class="text-muted small">Teams</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="card h-100 p-3">
+      <div class="d-flex align-items-center gap-3">
+        <div class="fs-2">✅</div>
+        <div>
+          <div class="fs-4 fw-bold">{{ checked_in }}</div>
+          <div class="text-muted small">Ingecheckt</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="card h-100 p-3">
+      <div class="d-flex align-items-center gap-3">
+        <div class="fs-2">📍</div>
+        <div>
+          <div class="fs-4 fw-bold">{{ locations|length }}</div>
+          <div class="text-muted small">Locaties</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Quick actions -->
+<div class="card mb-4">
+  <div class="card-body">
+    <h5 class="fw-bold mb-3">Snelle acties</h5>
+    <div class="d-flex flex-wrap gap-2">
+      <a href="{{ url_for('admin_upload') }}" class="btn btn-outline-primary">
+        <i class="bi bi-upload me-2"></i>CSV uploaden
+      </a>
+      <a href="{{ url_for('admin_groups') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-people me-2"></i>Teams bekijken
+      </a>
+      <a href="{{ url_for('admin_qr') }}" class="btn btn-outline-dark">
+        <i class="bi bi-qr-code me-2"></i>QR-code tonen
+      </a>
+      <a href="{{ url_for('admin_game') }}" class="btn btn-outline-success">
+        <i class="bi bi-play-circle me-2"></i>Spel beheren
+      </a>
+      <a href="{{ url_for('admin_settings') }}" class="btn btn-outline-warning">
+        <i class="bi bi-gear me-2"></i>Codes instellen
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- Stap-voor-stap gids -->
+<div class="card mb-4">
+  <div class="card-body">
+    <h5 class="fw-bold mb-3">📋 Stappenplan evenement</h5>
+    <div class="row g-2">
+      {% set steps = [
+        ("1", "CSV uploaden", "Laad de deelnemerslijst (voornaam, achternaam, leoclub)", "upload", "primary"),
+        ("2", "Teams maken", "Kies het aantal teams, het systeem verdeelt automatisch", "groups", "primary"),
+        ("3", "Codes instellen", "Stel de geheime codes in voor elke locatie in Aalst", "settings", "warning"),
+        ("4", "QR-code tonen", "Projecteer de QR-code op een beamerscherm", "qr", "dark"),
+        ("5", "Spel starten", "Geef het startsein en volg de voortgang live", "game", "success"),
+      ] %}
+      {% for num, title, desc, endpoint, color in steps %}
+      <div class="col-12 col-md-6 col-xl-auto flex-xl-fill">
+        <div class="border rounded-3 p-3 h-100 d-flex align-items-start gap-3">
+          <span class="step-badge bg-{{ color }} text-white">{{ num }}</span>
+          <div>
+            <div class="fw-semibold small">{{ title }}</div>
+            <div class="text-muted" style="font-size:.8rem;">{{ desc }}</div>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<!-- Team progress preview -->
+{% if teams %}
+<div class="card">
+  <div class="card-body">
+    <h5 class="fw-bold mb-3">🏁 Live teamvoortgang</h5>
+    <div class="row g-3" id="team-progress-preview">
+      {% for team in teams %}
+      <div class="col-sm-6 col-xl-4">
+        <div class="border rounded-3 p-3" style="border-left: 4px solid {{ team.color }} !important;">
+          <div class="d-flex align-items-center mb-2">
+            <span class="fw-bold" style="color:{{ team.color }}">{{ team.name }}</span>
+            {% if team.finished %}
+            <span class="badge bg-success ms-auto">Klaar! 🎉</span>
+            {% else %}
+            <span class="badge bg-light text-dark ms-auto">Stap {{ team.current_step }}/{{ locations|length }}</span>
+            {% endif %}
+          </div>
+          <div class="progress mb-2" style="height:6px;">
+            <div class="progress-bar" style="width:{{ team.progress_pct }}%; background:{{ team.color }}"></div>
+          </div>
+          <div class="text-muted small">
+            {% if team.current_location %}
+              📍 Nu: {{ team.current_location.name }}
+            {% else %}
+              🎉 Alle locaties bezocht!
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Auto-refresh progress every 10 seconds
+  {% if settings.game_started and teams %}
+  setInterval(() => location.reload(), 10000);
+  {% endif %}
+</script>
+{% endblock %}

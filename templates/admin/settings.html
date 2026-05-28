@@ -1,0 +1,99 @@
+{% extends "base_admin.html" %}
+{% block title %}Instellingen – Stadsspel Aalst{% endblock %}
+
+{% block content %}
+<h2 class="fw-bold mb-1">Instellingen</h2>
+<p class="text-muted mb-4">Stel de geheime codes in per locatie en beheer het wachtwoord.</p>
+
+<div class="row g-4">
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-body p-4">
+        <h5 class="fw-semibold mb-1"><i class="bi bi-key me-2 text-warning"></i>Geheime locatiecodes</h5>
+        <p class="text-muted small mb-4">
+          Leg bij elke locatie een briefje neer (of stuur iemand) met de bijbehorende code.
+          Teams voeren deze code in wanneer ze de locatie bereiken.
+        </p>
+
+        <form method="POST">
+          {% for loc in locations %}
+          <div class="mb-4 p-3 rounded-3 border" style="border-left: 4px solid #6c757d !important;">
+            <div class="d-flex align-items-center mb-2">
+              <span class="fs-5 me-2">{{ loc.emoji }}</span>
+              <strong>{{ loc.name }}</strong>
+            </div>
+            <div class="row g-2 align-items-center">
+              <div class="col">
+                <input type="text"
+                       name="code_{{ loc.id }}"
+                       value="{{ settings.location_codes[loc.id] }}"
+                       class="form-control form-control-lg font-monospace text-uppercase fw-bold"
+                       placeholder="bv. LEEUW"
+                       maxlength="20"
+                       oninput="this.value=this.value.toUpperCase()"
+                       required>
+              </div>
+              <div class="col-auto">
+                <button type="button" class="btn btn-outline-secondary"
+                        onclick="document.querySelector('[name=code_{{ loc.id }}]').value = randomCode()">
+                  <i class="bi bi-arrow-repeat"></i>
+                </button>
+              </div>
+            </div>
+            <div class="form-text mt-1">
+              <i class="bi bi-info-circle me-1"></i>
+              Challenge: <em>{{ loc.challenge[:80] }}…</em>
+            </div>
+          </div>
+          {% endfor %}
+
+          <hr>
+
+          <h5 class="fw-semibold mb-3"><i class="bi bi-shield-lock me-2 text-danger"></i>Admin wachtwoord</h5>
+          <div class="mb-3">
+            <label class="form-label">Nieuw wachtwoord (leeg laten = ongewijzigd)</label>
+            <input type="password" name="admin_password" class="form-control" placeholder="Nieuw wachtwoord…">
+          </div>
+
+          <button type="submit" class="btn btn-success btn-lg px-5 fw-semibold">
+            <i class="bi bi-save me-2"></i>Opslaan
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card">
+      <div class="card-body p-4">
+        <h5 class="fw-semibold mb-3"><i class="bi bi-lightbulb me-2 text-info"></i>Tips voor codes</h5>
+        <ul class="small text-muted">
+          <li class="mb-2">Kies korte, makkelijk te typen codes (4–8 letters).</li>
+          <li class="mb-2">Gebruik alleen hoofdletters en cijfers (geen spaties).</li>
+          <li class="mb-2">Print de code groot uit of schrijf hem op een kaartje.</li>
+          <li class="mb-2">Leg het kaartje pas neer vlak voor het spel start.</li>
+          <li class="mb-2">Verberg de code ergens logisch bij de locatie.</li>
+        </ul>
+        <hr>
+        <h6 class="fw-semibold mb-2">Suggesties</h6>
+        <div class="d-flex flex-wrap gap-2">
+          {% for sug in ["AALST", "LEOS", "HOOP", "VRIJ", "ZOUT", "KEIZER", "MARKT", "VREDE"] %}
+          <span class="badge bg-light text-dark font-monospace border px-2 py-2" style="cursor:pointer;"
+                onclick="navigator.clipboard.writeText('{{ sug }}')">{{ sug }}</span>
+          {% endfor %}
+        </div>
+        <div class="form-text mt-2">Klik op een suggestie om te kopiëren.</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function randomCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  return Array.from({length: 6}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+}
+</script>
+{% endblock %}

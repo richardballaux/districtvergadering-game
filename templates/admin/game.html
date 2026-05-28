@@ -1,0 +1,192 @@
+{% extends "base_admin.html" %}
+{% block title %}Spel beheren – Stadsspel Aalst{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-4">
+  <div>
+    <h2 class="fw-bold mb-0">Spel beheren</h2>
+    <p class="text-muted mb-0">Start het spel en volg de live voortgang van alle teams.</p>
+  </div>
+  <div class="ms-auto">
+    {% if settings.game_started %}
+    <span class="badge bg-success fs-6 px-3 py-2 me-2"><i class="bi bi-broadcast me-1"></i>Live</span>
+    {% endif %}
+    <button class="btn btn-outline-secondary btn-sm" onclick="location.reload()">
+      <i class="bi bi-arrow-clockwise me-1"></i>Vernieuwen
+    </button>
+  </div>
+</div>
+
+<!-- Game control -->
+<div class="card mb-4">
+  <div class="card-body p-4">
+    <div class="row align-items-center g-3">
+      <div class="col-md-6">
+        <h5 class="fw-semibold mb-1">
+          {% if settings.game_started %}
+          🚀 Spel is actief
+          {% else %}
+          ⏳ Spel is nog niet gestart
+          {% endif %}
+        </h5>
+        <p class="text-muted small mb-0">
+          {% if settings.game_started and settings.game_started_at %}
+          Gestart om {{ settings.game_started_at.strftime('%H:%M') }} UTC
+          {% elif not settings.game_started %}
+          Zorg eerst dat alle teams aangemaakt zijn en deelnemers ingelogd zijn.
+          {% endif %}
+        </p>
+      </div>
+      <div class="col-md-6 d-flex gap-2 justify-content-md-end flex-wrap">
+        {% if not settings.game_started %}
+        <form method="POST">
+          <input type="hidden" name="action" value="start">
+          <button type="submit" class="btn btn-success btn-lg px-4 fw-semibold"
+            {% if not teams %}disabled{% endif %}>
+            <i class="bi bi-play-fill me-2"></i>Spel starten
+          </button>
+        </form>
+        {% else %}
+        <span class="btn btn-success btn-lg px-4 fw-semibold disabled">
+          <i class="bi bi-play-fill me-2"></i>Spel gestart
+        </span>
+        {% endif %}
+        <form method="POST" onsubmit="return confirm('Alle voortgang wordt gewist. Zeker weten?')">
+          <input type="hidden" name="action" value="reset">
+          <button type="submit" class="btn btn-outline-danger btn-lg px-4">
+            <i class="bi bi-arrow-counterclockwise me-2"></i>Reset
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if not teams %}
+<div class="alert alert-warning">
+  <i class="bi bi-exclamation-triangle me-2"></i>
+  Geen teams aangemaakt. <a href="{{ url_for('admin_groups') }}">Ga naar Teams</a> om groepen aan te maken.
+</div>
+{% else %}
+
+<!-- Live progress -->
+<h5 class="fw-semibold mb-3">🏁 Live teamvoortgang</h5>
+<div class="row g-3" id="live-progress">
+  {% for team in teams %}
+  <div class="col-sm-6 col-xl-4" id="team-card-{{ team.id }}">
+    <div class="card h-100" style="border-top: 4px solid {{ team.color }};">
+      <div class="card-body p-3">
+
+        <!-- Team header -->
+        <div class="d-flex align-items-center mb-3">
+          <div class="fw-bold fs-5" style="color:{{ team.color }}">{{ team.name }}</div>
+          <div class="ms-auto">
+            {% if team.finished %}
+            <span class="badge bg-success">🎉 Klaar!</span>
+            {% elif settings.game_started %}
+            <span class="badge bg-primary">Stap {{ team.current_step }}/{{ locations|length }}</span>
+            {% else %}
+            <span class="badge bg-secondary">Wacht…</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Progress bar -->
+        <div class="progress mb-3" style="height: 8px;">
+          <div class="progress-bar" role="progressbar"
+               style="width: {{ team.progress_pct }}%; background: {{ team.color }};"
+               aria-valuenow="{{ team.progress_pct }}" aria-valuemin="0" aria-valuemax="100">
+          </div>
+        </div>
+
+        <!-- Current location -->
+        <div class="mb-3 p-2 bg-light rounded-2 small">
+          {% if team.finished %}
+            <span class="text-success fw-semibold">🎊 Alle locaties bezocht!</span>
+          {% elif team.current_location %}
+            <span class="text-muted">📍 Bezig bij:</span>
+            <span class="fw-semibold ms-1">{{ team.current_location.emoji }} {{ team.current_location.name }}</span>
+          {% endif %}
+        </div>
+
+        <!-- Route -->
+        <div class="mb-3 small text-muted">
+          <strong>Route:</strong>
+          {% for loc_id in team.route %}
+          {% set loc = locations[loc_id] %}
+          <span class="{% if loop.index0 < team.current_step %}text-success{% elif loop.index0 == team.current_step and not team.finished %}fw-bold text-dark{% else %}text-muted{% endif %}">
+            {{ loc.emoji }}
+            {% if loop.index0 < team.current_step %}✓{% endif %}
+          </span>
+          {% if not loop.last %}<span class="text-muted">→</span>{% endif %}
+          {% endfor %}
+        </div>
+
+        <!-- Members -->
+        <details class="small">
+          <summary class="text-muted" style="cursor:pointer;">
+            👥 {{ team.members|length }} leden
+            ({{ team.members|selectattr('checked_in')|list|length }} ingelogd)
+          </summary>
+          <ul class="list-unstyled mt-2 mb-0">
+            {% for m in team.members %}
+            <li class="d-flex align-items-center py-1">
+              <span class="{% if m.checked_in %}text-success{% else %}text-muted{% endif %} me-2">
+                {% if m.checked_in %}●{% else %}○{% endif %}
+              </span>
+              <span>{{ m.full_name }}</span>
+              <span class="badge badge-club ms-1">{{ m.club }}</span>
+            </li>
+            {% endfor %}
+          </ul>
+        </details>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Location overview -->
+<h5 class="fw-semibold mt-4 mb-3">📍 Locatie-overzicht</h5>
+<div class="row g-3">
+  {% for loc in locations %}
+  <div class="col-sm-6 col-xl-3">
+    <div class="card">
+      <div class="card-body p-3">
+        <h6 class="fw-bold mb-1">{{ loc.emoji }} {{ loc.name }}</h6>
+        <p class="small text-muted mb-2">{{ loc.challenge[:80] }}…</p>
+        <div class="small">
+          <strong>Teams hier nu:</strong>
+          {% set teams_here = teams|selectattr('current_location')|selectattr('current_location.id', 'equalto', loc.id)|list %}
+          {% if teams_here %}
+            {% for t in teams_here %}
+            <span class="badge me-1" style="background:{{ t.color }}">{{ t.name }}</span>
+            {% endfor %}
+          {% else %}
+            <span class="text-muted">—</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+{% if settings.game_started %}
+async function refreshProgress() {
+  try {
+    const res = await fetch('{{ url_for("admin_game_progress") }}');
+    const data = await res.json();
+    // Full reload for simplicity; could be incremental
+    // location.reload() — only reload if state changed
+  } catch (e) {}
+}
+setInterval(refreshProgress, 15000);
+{% endif %}
+</script>
+{% endblock %}

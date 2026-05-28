@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Stadsspel – {{ team.name }}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      background: #f0f2f5;
+      min-height: 100vh;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      padding-bottom: 5rem;
+    }
+
+    /* Top bar */
+    .top-bar {
+      background: {{ team.color }};
+      color: #fff;
+      padding: 1rem 1.25rem;
+      position: sticky; top: 0; z-index: 50;
+      box-shadow: 0 2px 12px rgba(0,0,0,.2);
+    }
+    .top-bar .team-name { font-weight: 800; font-size: 1.1rem; }
+    .top-bar .member-name { font-size: .8rem; opacity: .85; }
+    .top-bar .progress { height: 6px; background: rgba(255,255,255,.3); border-radius: 3px; margin-top:.5rem; }
+    .top-bar .progress-bar { background: #fff; border-radius: 3px; }
+    .step-count { font-size: .75rem; opacity: .8; }
+
+    /* Cards */
+    .card-section {
+      background: #fff;
+      border-radius: 18px;
+      margin: 1rem;
+      padding: 1.25rem;
+      box-shadow: 0 2px 12px rgba(0,0,0,.07);
+    }
+    .section-label {
+      font-size: .7rem; font-weight: 700; letter-spacing: .1em;
+      text-transform: uppercase; color: #999; margin-bottom: .6rem;
+    }
+    .location-icon { font-size: 3rem; line-height: 1; }
+    .location-name { font-size: 1.4rem; font-weight: 800; color: #1a1a2e; margin-top: .25rem; }
+    .clue-text {
+      background: #f8f9fa;
+      border-left: 4px solid {{ team.color }};
+      border-radius: 0 10px 10px 0;
+      padding: 1rem; font-size: .95rem; line-height: 1.6; color: #333;
+    }
+    .challenge-text {
+      background: linear-gradient(135deg,#fff9c4 0%,#fff3e0 100%);
+      border: 2px dashed #ffc107;
+      border-radius: 12px;
+      padding: 1rem; font-size: .95rem; line-height: 1.6; color: #333;
+    }
+    .code-input {
+      font-family: 'Courier New', monospace;
+      font-size: 1.5rem; font-weight: 700; text-align: center;
+      text-transform: uppercase; letter-spacing: .15em;
+      border: 2px solid #dee2e6; border-radius: 14px; padding: .75rem;
+      width: 100%; transition: border-color .2s;
+    }
+    .code-input:focus { border-color: {{ team.color }}; outline: none; box-shadow: 0 0 0 3px {{ team.color }}33; }
+    .btn-submit {
+      background: {{ team.color }}; border: none; border-radius: 14px; color: #fff;
+      font-weight: 700; font-size: 1.05rem; padding: .85rem; width: 100%;
+      margin-top: .75rem; transition: opacity .2s, transform .15s;
+    }
+    .btn-submit:hover { opacity: .9; transform: translateY(-1px); color: #fff; }
+    .btn-submit:disabled { opacity: .5; }
+
+    /* Waiting */
+    .waiting-screen {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; min-height: 70vh; text-align: center; padding: 2rem;
+    }
+    .pulse { animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.08)} }
+
+    /* Finished */
+    .confetti-bg {
+      background: linear-gradient(135deg,#f093fb 0%,#f5576c 50%,#fda085 100%);
+      color: #fff; border-radius: 18px; padding: 2rem; text-align: center;
+      margin: 1rem; box-shadow: 0 8px 32px rgba(245,87,108,.4);
+    }
+
+    /* Toast */
+    .toast-msg {
+      position: fixed; bottom: 5rem; left: 50%; transform: translateX(-50%);
+      background: #333; color: #fff; padding: .75rem 1.5rem;
+      border-radius: 12px; font-size: .9rem; z-index: 900;
+      max-width: 90vw; text-align: center; display: none;
+    }
+    .toast-msg.success { background: #27ae60; }
+    .toast-msg.error { background: #e74c3c; }
+
+    /* Bottom bar */
+    .bottom-bar {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: #fff; border-top: 1px solid #eee;
+      padding: .75rem 1.5rem;
+      display: flex; align-items: center; justify-content: space-between; z-index: 50;
+    }
+
+    /* ===================== CHAT PANEL ===================== */
+    .chat-btn {
+      position: fixed; bottom: 4.5rem; right: 1rem; z-index: 200;
+      width: 52px; height: 52px; border-radius: 50%;
+      background: {{ team.color }}; color: #fff; border: none;
+      font-size: 1.4rem; box-shadow: 0 4px 16px rgba(0,0,0,.25);
+      display: flex; align-items: center; justify-content: center;
+      transition: transform .15s;
+    }
+    .chat-btn:hover { transform: scale(1.08); }
+    .chat-badge {
+      position: absolute; top: -4px; right: -4px;
+      background: #e74c3c; color: #fff;
+      border-radius: 50%; width: 20px; height: 20px;
+      font-size: .7rem; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      display: none;
+    }
+
+    .chat-panel {
+      position: fixed; inset: 0; z-index: 300;
+      display: flex; flex-direction: column;
+      background: #f0f2f5;
+      transform: translateY(100%);
+      transition: transform .3s ease;
+    }
+    .chat-panel.open { transform: translateY(0); }
+
+    .chat-topbar {
+      background: {{ team.color }}; color: #fff;
+      padding: 1rem 1.25rem;
+      display: flex; align-items: center; gap: .75rem;
+    }
+    .chat-topbar .title { font-weight: 700; font-size: 1rem; }
+    .chat-close { background: rgba(255,255,255,.2); border: none; border-radius: 8px; color:#fff; padding:.3rem .8rem; }
+
+    .chat-messages {
+      flex: 1; overflow-y: auto; padding: 1rem;
+      display: flex; flex-direction: column; gap: .6rem;
+    }
+    .chat-bubble {
+      max-width: 80%;
+      padding: .6rem .9rem;
+      border-radius: 16px;
+      font-size: .9rem;
+      line-height: 1.45;
+      word-break: break-word;
+    }
+    .bubble-admin {
+      background: #fff; color: #1a1a2e;
+      border-bottom-left-radius: 4px;
+      align-self: flex-start;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+    }
+    .bubble-team {
+      background: {{ team.color }}; color: #fff;
+      border-bottom-right-radius: 4px;
+      align-self: flex-end;
+    }
+    .bubble-meta { font-size: .7rem; opacity: .6; margin-top: .2rem; }
+    .bubble-photo {
+      max-width: 200px; border-radius: 10px; margin-top: .3rem;
+      cursor: pointer; display: block;
+    }
+    .chat-empty {
+      text-align: center; color: #999; padding: 3rem 1rem; font-size: .9rem;
+    }
+
+    .chat-input-bar {
+      background: #fff; border-top: 1px solid #eee;
+      padding: .75rem;
+      display: flex; flex-direction: column; gap: .5rem;
+    }
+    .chat-input-row { display: flex; align-items: flex-end; gap: .5rem; }
+    .chat-textarea {
+      flex: 1; border: 1.5px solid #dee2e6; border-radius: 12px;
+      padding: .5rem .75rem; font-size: .95rem; resize: none;
+      max-height: 100px; outline: none; font-family: inherit;
+    }
+    .chat-textarea:focus { border-color: {{ team.color }}; }
+    .chat-send-btn {
+      background: {{ team.color }}; border: none; border-radius: 12px;
+      color: #fff; font-size: 1.1rem; width: 42px; height: 42px;
+      flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+    }
+    .photo-preview-wrap { position: relative; display: inline-block; }
+    .photo-preview { max-height: 80px; border-radius: 8px; }
+    .photo-remove {
+      position: absolute; top: -6px; right: -6px;
+      background: #e74c3c; color: #fff; border: none; border-radius: 50%;
+      width: 20px; height: 20px; font-size: .7rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .photo-attach-btn {
+      background: none; border: 1.5px dashed #ccc; border-radius: 10px;
+      color: #888; padding: .4rem .75rem; font-size: .85rem; cursor: pointer;
+      display: flex; align-items: center; gap: .35rem;
+    }
+    .photo-attach-btn:hover { border-color: {{ team.color }}; color: {{ team.color }}; }
+
+    /* Lightbox */
+    .lightbox {
+      position: fixed; inset: 0; background: rgba(0,0,0,.9); z-index: 500;
+      display: flex; align-items: center; justify-content: center;
+      display: none;
+    }
+    .lightbox img { max-width: 95vw; max-height: 90vh; border-radius: 8px; }
+    .lightbox-close {
+      position: absolute; top: 1rem; right: 1rem;
+      background: rgba(255,255,255,.2); border: none; color: #fff;
+      border-radius: 50%; width: 36px; height: 36px; font-size: 1.1rem;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Top bar -->
+<div class="top-bar">
+  <div class="d-flex align-items-center justify-content-between">
+    <div>
+      <div class="team-name">{{ team.name }}</div>
+      <div class="member-name">{{ participant.full_name }} · {{ participant.club }}</div>
+    </div>
+    <div class="text-end">
+      <div class="step-count" id="stepCount">
+        {% if team.finished %}Klaar!{% else %}{{ team.current_step }}/{{ locations|length }}{% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="progress">
+    <div class="progress-bar" id="progressBar" style="width:{{ team.progress_pct }}%;"></div>
+  </div>
+</div>
+
+<!-- WAITING STATE -->
+<div id="waitingScreen" class="waiting-screen"
+     style="display:{% if not settings.game_started %}flex{% else %}none{% endif %};">
+  <div class="pulse" style="font-size:4rem;margin-bottom:1rem;">⏳</div>
+  <h4 class="fw-bold">Wachten op start…</h4>
+  <p class="text-muted">De begeleider geeft zo het startsein.<br>Zorg dat je klaar staat bij de Hopmarkt!</p>
+  <div class="mt-3 px-3 py-2 rounded-3"
+       style="background:{{ team.color }}22;border:1px solid {{ team.color }}44;color:{{ team.color }};">
+    <strong>Jouw team:</strong> {{ team.name }}
+  </div>
+</div>
+
+<!-- GAME STATE -->
+<div id="gameScreen"
+     style="display:{% if settings.game_started and not team.finished %}block{% else %}none{% endif %};">
+
+  <div class="card-section">
+    <div class="section-label">📍 Huidige locatie</div>
+    {% if team.current_location %}
+    <div class="text-center mb-2">
+      <div class="location-icon" id="locationEmoji">{{ team.current_location.emoji }}</div>
+      <div class="location-name" id="locationName">{{ team.current_location.name }}</div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="card-section">
+    <div class="section-label">🗺️ Aanwijzing</div>
+    <div class="clue-text" id="clueText">
+      {% if team.current_location %}{{ team.current_location.clue }}{% endif %}
+    </div>
+  </div>
+
+  <div class="card-section">
+    <div class="section-label">🎯 Opdracht</div>
+    <div class="challenge-text" id="challengeText">
+      {% if team.current_location %}{{ team.current_location.challenge }}{% endif %}
+    </div>
+    <p class="text-muted small mt-2 mb-0">
+      💡 <span id="hintText">{% if team.current_location %}{{ team.current_location.arrival_hint }}{% endif %}</span>
+    </p>
+  </div>
+
+  <div class="card-section">
+    <div class="section-label">🔐 Geheime code</div>
+    <p class="text-muted small mb-3">Vul de code in die je bij de locatie gevonden hebt:</p>
+    <input type="text" class="code-input" id="codeInput" placeholder="CODE"
+           maxlength="20" autocomplete="off" autocorrect="off"
+           autocapitalize="characters" spellcheck="false">
+    <button class="btn-submit" id="submitCodeBtn" onclick="submitCode()">
+      Bevestigen →
+    </button>
+  </div>
+</div>
+
+<!-- FINISHED STATE -->
+<div id="finishedScreen"
+     style="display:{% if team.finished %}block{% else %}none{% endif %};">
+  <div class="confetti-bg mt-3">
+    <div style="font-size:4rem;margin-bottom:.5rem;">🎉</div>
+    <h2 class="fw-bold">Gefeliciteerd!</h2>
+    <p style="opacity:.9;">Jullie hebben alle locaties voltooid!</p>
+    <div style="background:rgba(255,255,255,.2);border-radius:12px;padding:1rem;">
+      <strong>{{ finish_message }}</strong>
+    </div>
+  </div>
+  <div class="card-section text-center">
+    <div class="fs-2 mb-2">🏆</div>
+    <h5 class="fw-bold">{{ team.name }}</h5>
+    <p class="text-muted">Alle {{ locations|length }} locaties bezocht!</p>
+    <div class="d-flex justify-content-center gap-2 flex-wrap mt-2">
+      {% for loc in locations %}
+      <span class="badge bg-success fs-6 px-3 py-2">{{ loc.emoji }} {{ loc.name }}</span>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast-msg" id="toastMsg"></div>
+
+<!-- Bottom bar -->
+<div class="bottom-bar">
+  <small class="text-muted">{{ participant.full_name }}</small>
+  <a href="{{ url_for('participant_logout') }}" class="btn btn-sm btn-outline-secondary rounded-3"
+     onclick="return confirm('Uitloggen?')">Uitloggen</a>
+</div>
+
+<!-- Chat button (floating) -->
+<button class="chat-btn" onclick="openChat()" title="Berichten">
+  💬
+  <div class="chat-badge" id="chatBadge"></div>
+</button>
+
+<!-- Chat panel -->
+<div class="chat-panel" id="chatPanel">
+  <div class="chat-topbar">
+    <button class="chat-close" onclick="closeChat()">←</button>
+    <div class="title">💬 Berichten – {{ team.name }}</div>
+  </div>
+
+  <div class="chat-messages" id="chatMessages">
+    <div class="chat-empty" id="chatEmpty">Nog geen berichten.</div>
+  </div>
+
+  <div class="chat-input-bar">
+    <div id="photoPreviewWrap" style="display:none;">
+      <div class="photo-preview-wrap">
+        <img id="photoPreview" class="photo-preview" src="" alt="">
+        <button class="photo-remove" onclick="removePhoto()">✕</button>
+      </div>
+    </div>
+    <div class="chat-input-row">
+      <textarea class="chat-textarea" id="chatTextarea" rows="1"
+                placeholder="Typ een bericht…"
+                oninput="autoResize(this)"></textarea>
+      <button class="chat-send-btn" onclick="sendMessage()" title="Verzenden">➤</button>
+    </div>
+    <div class="d-flex gap-2">
+      <button class="photo-attach-btn" onclick="document.getElementById('photoInput').click()">
+        📷 Foto toevoegen
+      </button>
+      <input type="file" id="photoInput" accept="image/*" style="display:none"
+             onchange="previewPhoto(this)">
+    </div>
+  </div>
+</div>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <button class="lightbox-close" onclick="closeLightbox()">✕</button>
+  <img id="lightboxImg" src="" alt="">
+</div>
+
+<script>
+const TEAM_COLOR = '{{ team.color }}';
+let currentStep = {{ team.current_step }};
+let isFinished = {{ 'true' if team.finished else 'false' }};
+let gameStarted = {{ 'true' if settings.game_started else 'false' }};
+let chatOpen = false;
+let lastMessageId = 0;
+let selectedPhoto = null;
+
+// ── Toast ──────────────────────────────────────────────────────────────────
+function showToast(msg, type = '') {
+  const t = document.getElementById('toastMsg');
+  t.textContent = msg;
+  t.className = 'toast-msg ' + type;
+  t.style.display = 'block';
+  setTimeout(() => t.style.display = 'none', 3500);
+}
+
+// ── Code submission ────────────────────────────────────────────────────────
+async function submitCode() {
+  const input = document.getElementById('codeInput');
+  const btn = document.getElementById('submitCodeBtn');
+  const code = input.value.trim();
+  if (!code) return;
+
+  btn.disabled = true;
+  btn.textContent = 'Controleren…';
+
+  try {
+    const res = await fetch('/game/submit-code', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({code}),
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      if (data.finished) {
+        showToast('🎉 ' + data.message, 'success');
+        setTimeout(() => {
+          document.getElementById('gameScreen').style.display = 'none';
+          document.getElementById('finishedScreen').style.display = 'block';
+          document.getElementById('progressBar').style.width = '100%';
+          document.getElementById('stepCount').textContent = 'Klaar!';
+        }, 1200);
+      } else {
+        showToast(data.message, 'success');
+        currentStep++;
+        input.value = '';
+        document.getElementById('locationEmoji').textContent = data.next_emoji;
+        document.getElementById('locationName').textContent = data.next_location;
+        document.getElementById('clueText').textContent = data.next_clue;
+        document.getElementById('progressBar').style.width = ((currentStep / {{ locations|length }}) * 100) + '%';
+        document.getElementById('stepCount').textContent = currentStep + '/{{ locations|length }}';
+        pollStatus();
+      }
+    } else {
+      showToast(data.message || 'Verkeerde code!', 'error');
+      input.value = '';
+      input.focus();
+    }
+  } catch (e) {
+    showToast('Verbindingsfout. Probeer opnieuw.', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Bevestigen →';
+  }
+}
+
+document.getElementById('codeInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') submitCode();
+  setTimeout(() => {
+    const inp = document.getElementById('codeInput');
+    inp.value = inp.value.toUpperCase();
+  }, 0);
+});
+
+// ── Game status polling ────────────────────────────────────────────────────
+async function pollStatus() {
+  try {
+    const res = await fetch('/game/status');
+    const data = await res.json();
+    if (data.error) return;
+
+    if (!gameStarted && data.game_started) {
+      gameStarted = true;
+      document.getElementById('waitingScreen').style.display = 'none';
+      document.getElementById('gameScreen').style.display = 'block';
+    }
+
+    if (data.finished && !isFinished) {
+      isFinished = true;
+      document.getElementById('gameScreen').style.display = 'none';
+      document.getElementById('finishedScreen').style.display = 'block';
+    }
+
+    if (data.location_name) document.getElementById('locationName').textContent = data.location_name;
+    if (data.location_emoji) document.getElementById('locationEmoji').textContent = data.location_emoji;
+    if (data.clue) document.getElementById('clueText').textContent = data.clue;
+    if (data.challenge) document.getElementById('challengeText').textContent = data.challenge;
+    if (data.arrival_hint) document.getElementById('hintText').textContent = data.arrival_hint;
+    if (typeof data.progress_pct === 'number') {
+      document.getElementById('progressBar').style.width = data.progress_pct + '%';
+    }
+    if (typeof data.current_step === 'number') {
+      document.getElementById('stepCount').textContent =
+        data.finished ? 'Klaar!' : data.current_step + '/{{ locations|length }}';
+    }
+
+    // Unread badge
+    if (data.unread_messages > 0 && !chatOpen) {
+      const badge = document.getElementById('chatBadge');
+      badge.textContent = data.unread_messages;
+      badge.style.display = 'flex';
+    }
+  } catch(e) {}
+}
+
+setInterval(pollStatus, 8000);
+
+// ── Chat ───────────────────────────────────────────────────────────────────
+function openChat() {
+  chatOpen = true;
+  document.getElementById('chatPanel').classList.add('open');
+  document.getElementById('chatBadge').style.display = 'none';
+  loadMessages();
+}
+
+function closeChat() {
+  chatOpen = false;
+  document.getElementById('chatPanel').classList.remove('open');
+}
+
+function renderBubble(msg) {
+  const isAdmin = msg.sender_type === 'admin';
+  const wrap = document.createElement('div');
+  wrap.style.display = 'flex';
+  wrap.style.flexDirection = 'column';
+  wrap.style.alignItems = isAdmin ? 'flex-start' : 'flex-end';
+
+  const bubble = document.createElement('div');
+  bubble.className = 'chat-bubble ' + (isAdmin ? 'bubble-admin' : 'bubble-team');
+
+  if (!isAdmin) {
+    const meta = document.createElement('div');
+    meta.className = 'bubble-meta';
+    meta.textContent = msg.sender_name;
+    bubble.appendChild(meta);
+  }
+
+  if (msg.content) {
+    const text = document.createElement('div');
+    text.textContent = msg.content;
+    bubble.appendChild(text);
+  }
+
+  if (msg.photo_url) {
+    const img = document.createElement('img');
+    img.className = 'bubble-photo';
+    img.src = msg.photo_url;
+    img.alt = 'foto';
+    img.onclick = () => openLightbox(msg.photo_url);
+    bubble.appendChild(img);
+  }
+
+  const time = document.createElement('div');
+  time.className = 'bubble-meta';
+  time.textContent = msg.sent_at;
+  bubble.appendChild(time);
+
+  wrap.appendChild(bubble);
+  return wrap;
+}
+
+async function loadMessages() {
+  try {
+    const res = await fetch('/game/messages');
+    const data = await res.json();
+    if (data.error) return;
+
+    const container = document.getElementById('chatMessages');
+    const empty = document.getElementById('chatEmpty');
+
+    if (data.messages.length === 0) {
+      empty.style.display = 'block';
+      return;
+    }
+    empty.style.display = 'none';
+    container.innerHTML = '';
+    container.appendChild(empty);
+
+    data.messages.forEach(msg => {
+      container.appendChild(renderBubble(msg));
+      lastMessageId = Math.max(lastMessageId, msg.id);
+    });
+    container.scrollTop = container.scrollHeight;
+  } catch(e) {}
+}
+
+async function sendMessage() {
+  const textarea = document.getElementById('chatTextarea');
+  const content = textarea.value.trim();
+  const photo = selectedPhoto;
+
+  if (!content && !photo) return;
+
+  // Optimistically clear input
+  textarea.value = '';
+  textarea.style.height = '';
+  removePhoto();
+
+  const fd = new FormData();
+  if (content) fd.append('content', content);
+  if (photo) fd.append('photo', photo, 'foto.jpg');
+
+  try {
+    const res = await fetch('/game/messages/send', {method: 'POST', body: fd});
+    const data = await res.json();
+    if (data.success) {
+      const container = document.getElementById('chatMessages');
+      document.getElementById('chatEmpty').style.display = 'none';
+      container.appendChild(renderBubble(data.message));
+      container.scrollTop = container.scrollHeight;
+    }
+  } catch(e) {
+    showToast('Bericht kon niet verzonden worden.', 'error');
+  }
+}
+
+document.getElementById('chatTextarea').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 100) + 'px';
+}
+
+// Compress image to max 1200px wide, JPEG 80% — reduces 5MB→~300KB
+async function compressImage(file) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const MAX = 1200;
+      let w = img.naturalWidth, h = img.naturalHeight;
+      if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      canvas.toBlob(blob => resolve(blob || file), 'image/jpeg', 0.80);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
+
+function previewPhoto(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('photoPreview').src = e.target.result;
+    document.getElementById('photoPreviewWrap').style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+
+  // Compress and store as blob
+  compressImage(file).then(blob => { selectedPhoto = blob; });
+}
+
+function removePhoto() {
+  selectedPhoto = null;
+  document.getElementById('photoPreview').src = '';
+  document.getElementById('photoPreviewWrap').style.display = 'none';
+}
+
+// Poll for new messages while chat is open
+setInterval(() => { if (chatOpen) loadMessages(); }, 6000);
+
+// ── Lightbox ───────────────────────────────────────────────────────────────
+function openLightbox(src) {
+  document.getElementById('lightboxImg').src = src;
+  document.getElementById('lightbox').style.display = 'flex';
+}
+function closeLightbox() {
+  document.getElementById('lightbox').style.display = 'none';
+}
+</script>
+</body>
+</html>

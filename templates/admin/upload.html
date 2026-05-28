@@ -1,0 +1,81 @@
+{% extends "base_admin.html" %}
+{% block title %}CSV uploaden – Stadsspel Aalst{% endblock %}
+
+{% block content %}
+<h2 class="fw-bold mb-1">CSV uploaden</h2>
+<p class="text-muted mb-4">Laad de lijst met deelnemers vanuit een CSV-bestand.</p>
+
+<div class="row g-4">
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-body p-4">
+        <h5 class="fw-semibold mb-3"><i class="bi bi-file-earmark-spreadsheet me-2 text-primary"></i>Bestand kiezen</h5>
+        <form method="POST" enctype="multipart/form-data">
+          <div class="mb-4">
+            <label class="form-label fw-semibold">CSV-bestand</label>
+            <input type="file" name="csv_file" accept=".csv" class="form-control form-control-lg" required>
+            <div class="form-text">Maximale bestandsgrootte: 5 MB. Ondersteunde scheidingstekens: komma of puntkomma.</div>
+          </div>
+          <button type="submit" class="btn btn-primary btn-lg px-5 fw-semibold">
+            <i class="bi bi-upload me-2"></i>Uploaden
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card h-100">
+      <div class="card-body p-4">
+        <h5 class="fw-semibold mb-3"><i class="bi bi-info-circle me-2 text-info"></i>Vereist formaat</h5>
+        <p class="text-muted small mb-3">Het CSV-bestand moet de volgende kolommen bevatten (kolomnamen zijn flexibel):</p>
+
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered">
+            <thead class="table-light">
+              <tr>
+                <th>Voornaam</th>
+                <th>Achternaam</th>
+                <th>LeoClub</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>Jan</td><td>Janssen</td><td>Leo Aalst</td></tr>
+              <tr><td>Marie</td><td>Pieters</td><td>Leo Gent</td></tr>
+              <tr><td>Lore</td><td>De Smet</td><td>Leo Brussel</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="mt-3">
+          <p class="small fw-semibold mb-2">Ondersteunde kolomnamen:</p>
+          <div class="d-flex flex-wrap gap-1">
+            {% for name in ["voornaam", "first_name", "naam", "achternaam", "last_name", "familienaam", "leoclub", "club", "leo_club"] %}
+            <code class="bg-light px-2 py-1 rounded small">{{ name }}</code>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="mt-3 p-3 bg-warning bg-opacity-10 rounded border border-warning border-opacity-25">
+          <small class="text-warning-emphasis">
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            <strong>Let op:</strong> uploaden verwijdert alle bestaande deelnemers en teams.
+          </small>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mt-4 p-3 bg-light rounded-3 border">
+  <h6 class="fw-semibold mb-2"><i class="bi bi-download me-2"></i>Voorbeeldbestand downloaden</h6>
+  <p class="text-muted small mb-2">Gebruik dit als sjabloon voor je eigen CSV-bestand:</p>
+  <pre class="mb-0 small bg-white border rounded p-3">voornaam;achternaam;leoclub
+Jan;Janssen;Leo Aalst
+Marie;Pieters;Leo Gent
+Lore;De Smet;Leo Brussel
+Pieter;Claes;Leo Antwerpen
+Sara;Vermeersch;Leo Gent
+Tom;Bogaert;Leo Aalst</pre>
+</div>
+{% endblock %}

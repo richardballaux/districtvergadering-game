@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Inchecken – Stadsspel Aalst</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      background: linear-gradient(160deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
+      min-height: 100vh;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      color: #fff;
+      padding-bottom: 6rem;
+    }
+
+    .top-bar {
+      display: flex;
+      align-items: center;
+      padding: 1rem 1.25rem;
+      gap: .75rem;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(15,32,39,.9);
+      backdrop-filter: blur(8px);
+    }
+    .back-btn {
+      background: rgba(255,255,255,.15);
+      border: none;
+      border-radius: 10px;
+      color: #fff;
+      padding: .4rem .9rem;
+      font-size: .9rem;
+      text-decoration: none;
+      flex-shrink: 0;
+    }
+    .search-wrap { flex: 1; }
+    .search-input {
+      width: 100%;
+      background: rgba(255,255,255,.15);
+      border: 1px solid rgba(255,255,255,.2);
+      border-radius: 10px;
+      color: #fff;
+      padding: .45rem .9rem;
+      font-size: .95rem;
+      outline: none;
+    }
+    .search-input::placeholder { color: rgba(255,255,255,.5); }
+    .search-input:focus { border-color: rgba(255,255,255,.5); }
+
+    .club-section { margin: 0 1rem 1rem; }
+    .club-header {
+      font-size: .7rem;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,.5);
+      padding: .5rem .25rem .3rem;
+      margin-top: .75rem;
+    }
+    .person-card {
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 12px;
+      padding: .85rem 1rem;
+      margin-bottom: .4rem;
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      transition: background .15s, border-color .15s;
+    }
+    .person-card:hover, .person-card:active { background: rgba(255,255,255,.18); border-color: rgba(255,255,255,.3); }
+    .person-card.checked-in { opacity: .55; cursor: default; }
+    .person-name { font-weight: 600; font-size: 1rem; }
+    .person-club { font-size: .75rem; color: rgba(255,255,255,.6); margin-top: .1rem; }
+    .checkin-badge { font-size: .7rem; background: rgba(255,255,255,.15); border-radius: 6px; padding: .2rem .5rem; margin-left: auto; flex-shrink: 0; }
+
+    /* Confirmation overlay */
+    .confirm-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.6);
+      z-index: 200;
+      display: flex;
+      align-items: flex-end;
+      padding: 1rem;
+      display: none;
+    }
+    .confirm-sheet {
+      background: #fff;
+      border-radius: 20px;
+      padding: 1.5rem;
+      width: 100%;
+      color: #1a1a2e;
+      transform: translateY(100px);
+      opacity: 0;
+      transition: transform .3s, opacity .3s;
+    }
+    .confirm-overlay.active { display: flex; }
+    .confirm-overlay.active .confirm-sheet { transform: translateY(0); opacity: 1; }
+    .team-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: .5rem;
+      border-radius: 50px;
+      padding: .4rem 1rem;
+      font-weight: 700;
+      font-size: 1rem;
+      margin: .5rem 0 1rem;
+    }
+    .btn-confirm {
+      border: none;
+      border-radius: 14px;
+      color: #fff;
+      font-weight: 700;
+      font-size: 1.05rem;
+      padding: .85rem;
+      width: 100%;
+    }
+    .btn-cancel {
+      background: none;
+      border: none;
+      color: #888;
+      font-size: .9rem;
+      width: 100%;
+      padding: .5rem;
+      margin-top: .25rem;
+    }
+
+    .no-results {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: rgba(255,255,255,.5);
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+<div class="top-bar">
+  <a href="{{ url_for('participant_index') }}" class="back-btn">←</a>
+  <div class="search-wrap">
+    <input type="text" class="search-input" id="searchInput" placeholder="Zoek je naam…" autocomplete="off" autofocus>
+  </div>
+</div>
+
+{% if not has_teams %}
+<div style="margin: 2rem 1rem; background: rgba(255,193,7,.15); border: 1px solid rgba(255,193,7,.3); border-radius: 12px; padding: 1rem; text-align:center;">
+  <div class="fs-4 mb-1">⚠️</div>
+  <p class="mb-0 fw-semibold small">Teams zijn nog niet aangemaakt.</p>
+  <p class="mb-0 small" style="color:rgba(255,255,255,.6)">Vraag de begeleider om de teams in te stellen.</p>
+</div>
+{% endif %}
+
+<div id="participantList" class="club-section">
+  {% for club, members in by_club.items() %}
+  <div class="club-header club-label">{{ club }}</div>
+  {% for person in members %}
+  <div class="person-card {% if person.checked_in %}checked-in{% endif %}"
+       data-id="{{ person.id }}"
+       data-name="{{ person.full_name }}"
+       data-club="{{ person.club }}"
+       data-search="{{ (person.full_name ~ ' ' ~ person.club)|lower }}"
+       onclick="{% if not person.checked_in %}selectPerson({{ person.id }}, '{{ person.full_name|e }}', '{{ person.club|e }}'){% endif %}">
+    <div>
+      <div class="person-name">{{ person.full_name }}</div>
+      <div class="person-club">{{ person.club }}</div>
+    </div>
+    {% if person.checked_in %}
+    <span class="checkin-badge">✓ al ingelogd</span>
+    {% else %}
+    <span style="margin-left:auto; color:rgba(255,255,255,.3);">›</span>
+    {% endif %}
+  </div>
+  {% endfor %}
+  {% endfor %}
+</div>
+
+<div class="no-results" id="noResults">
+  <div class="fs-2 mb-2">🔍</div>
+  <p>Geen resultaten gevonden.</p>
+</div>
+
+<!-- Confirmation sheet -->
+<div class="confirm-overlay" id="confirmOverlay" onclick="closeConfirm(event)">
+  <div class="confirm-sheet" id="confirmSheet">
+    <p class="text-muted small mb-1">Is dit jij?</p>
+    <h4 class="fw-bold mb-0" id="confirmName">—</h4>
+    <p class="text-muted small mb-2" id="confirmClub">—</p>
+
+    <div id="teamSection">
+      <p class="text-muted small mb-1">Jouw team:</p>
+      <div class="team-pill" id="teamPill">—</div>
+    </div>
+
+    <div id="noTeamSection" style="display:none;">
+      <div class="alert alert-warning py-2 small">Teams zijn nog niet aangemaakt. Vraag de begeleider.</div>
+    </div>
+
+    <div id="loadingSection" style="display:none; text-align:center; padding:1rem 0;">
+      <div class="spinner-border spinner-border-sm text-secondary"></div>
+      <span class="ms-2 text-muted small">Laden…</span>
+    </div>
+
+    <button class="btn-confirm mt-2" id="confirmBtn" onclick="confirmCheckin()" style="display:none; background:#333;">
+      ✅ Ja, ik ben het! Inchecken
+    </button>
+    <button class="btn-cancel" onclick="closeConfirmManual()">Annuleren</button>
+  </div>
+</div>
+
+<script>
+let selectedParticipantId = null;
+
+async function selectPerson(id, name, club) {
+  selectedParticipantId = id;
+  document.getElementById('confirmName').textContent = name;
+  document.getElementById('confirmClub').textContent = club;
+  document.getElementById('teamSection').style.display = 'none';
+  document.getElementById('noTeamSection').style.display = 'none';
+  document.getElementById('loadingSection').style.display = 'block';
+  document.getElementById('confirmBtn').style.display = 'none';
+
+  const overlay = document.getElementById('confirmOverlay');
+  overlay.style.display = 'flex';
+  requestAnimationFrame(() => overlay.classList.add('active'));
+
+  try {
+    const res = await fetch(`/join/info/${id}`);
+    const data = await res.json();
+    document.getElementById('loadingSection').style.display = 'none';
+
+    if (data.has_team) {
+      const pill = document.getElementById('teamPill');
+      pill.textContent = data.team_name;
+      pill.style.background = data.team_bg;
+      pill.style.color = data.team_color;
+      pill.style.border = `2px solid ${data.team_color}`;
+      document.getElementById('teamSection').style.display = 'block';
+
+      const btn = document.getElementById('confirmBtn');
+      btn.style.background = data.team_color;
+      btn.style.display = 'block';
+    } else {
+      document.getElementById('noTeamSection').style.display = 'block';
+    }
+  } catch (e) {
+    document.getElementById('loadingSection').style.display = 'none';
+    document.getElementById('noTeamSection').style.display = 'block';
+  }
+}
+
+async function confirmCheckin() {
+  if (!selectedParticipantId) return;
+  const btn = document.getElementById('confirmBtn');
+  btn.disabled = true;
+  btn.textContent = 'Inchecken…';
+
+  const fd = new FormData();
+  fd.append('participant_id', selectedParticipantId);
+
+  try {
+    const res = await fetch('/join', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (data.success) {
+      window.location.href = data.redirect;
+    } else {
+      alert(data.message || 'Er ging iets mis.');
+      btn.disabled = false;
+      btn.textContent = '✅ Ja, ik ben het! Inchecken';
+    }
+  } catch (e) {
+    alert('Verbindingsfout. Probeer opnieuw.');
+    btn.disabled = false;
+    btn.textContent = '✅ Ja, ik ben het! Inchecken';
+  }
+}
+
+function closeConfirm(e) {
+  if (e.target === document.getElementById('confirmOverlay')) closeConfirmManual();
+}
+function closeConfirmManual() {
+  const overlay = document.getElementById('confirmOverlay');
+  overlay.classList.remove('active');
+  setTimeout(() => overlay.style.display = 'none', 300);
+  selectedParticipantId = null;
+}
+
+// Search filter
+document.getElementById('searchInput').addEventListener('input', function() {
+  const q = this.value.toLowerCase().trim();
+  const cards = document.querySelectorAll('.person-card');
+  const headers = document.querySelectorAll('.club-label');
+  let anyVisible = false;
+
+  // Hide/show headers based on whether their group has matches
+  headers.forEach(h => {
+    let sibling = h.nextElementSibling;
+    let groupVisible = false;
+    while (sibling && sibling.classList.contains('person-card')) {
+      const match = !q || sibling.dataset.search.includes(q);
+      sibling.style.display = match ? '' : 'none';
+      if (match) { groupVisible = true; anyVisible = true; }
+      sibling = sibling.nextElementSibling;
+    }
+    h.style.display = groupVisible ? '' : 'none';
+  });
+
+  document.getElementById('noResults').style.display = anyVisible || !q ? 'none' : 'block';
+});
+</script>
+</body>
+</html>
