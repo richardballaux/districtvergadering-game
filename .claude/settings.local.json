@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p /Users/richardballaux/Engineering-projects/Districtvergadering-spel/.claude)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(pkill -f \"python3 run.py\")",
+      "Bash(kill 56108)",
+      "Bash(cat)",
+      "Bash(curl -s -b /tmp/cookies.txt -c /tmp/cookies.txt -X POST http://127.0.0.1:5050/admin/login -F password=leos2024 -o /dev/null -w '%{http_code}\\\\n')",
+      "Bash(curl -s -b /tmp/cookies.txt -c /tmp/cookies.txt -X POST http://127.0.0.1:5050/admin/upload -F csv_file=@/tmp/test_deelnemers.csv -w '\\\\nHTTP: %{http_code}')",
+      "Bash(python3 -c ' *)",
+      "Bash(pkill -f \"python3 run.py\" 2>/dev/null; sleep 1 *)",
+      "Bash(curl -s -b /tmp/cookies.txt -c /tmp/cookies.txt -X POST http://127.0.0.1:5050/admin/login -F password=leos2024 -L -o /dev/null -w '%{http_code}\\\\n')",
+      "Bash(curl -s -b /tmp/cookies.txt -c /tmp/cookies.txt -X POST http://127.0.0.1:5050/admin/upload -F csv_file=@/tmp/test_deelnemers.csv -L -o /tmp/upload_response.html -w 'HTTP: %{http_code}\\\\n')",
+      "Bash(pkill -f \"python3 -c\")"
+    ]
+  }
+}

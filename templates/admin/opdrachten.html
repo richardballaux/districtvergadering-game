@@ -1,0 +1,282 @@
+{% extends "base_admin.html" %}
+{% block title %}Opdrachten – Stadsspel Aalst{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-4">
+  <div>
+    <h2 class="fw-bold mb-0">Opdrachten &amp; Locaties</h2>
+    <p class="text-muted mb-0">Beheer de rondes, aanwijzingen en opdrachten van het stadsspel.</p>
+  </div>
+  <button class="btn btn-primary ms-auto" data-bs-toggle="modal" data-bs-target="#addModal">
+    <i class="bi bi-plus-circle me-2"></i>Ronde toevoegen
+  </button>
+</div>
+
+{% if not locations %}
+<div class="card">
+  <div class="card-body text-center p-5">
+    <div class="fs-1 mb-3">📍</div>
+    <h5 class="text-muted">Nog geen locaties</h5>
+    <p class="text-muted small">Voeg je eerste locatie toe om het spel op te zetten.</p>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addModal">
+      <i class="bi bi-plus-circle me-2"></i>Eerste locatie toevoegen
+    </button>
+  </div>
+</div>
+{% else %}
+<div class="d-flex flex-column gap-3" id="locList">
+  {% for loc in locations %}
+  <div class="card" id="loc-{{ loc.id }}">
+    <div class="card-body p-0">
+      <!-- Collapsed header -->
+      <div class="d-flex align-items-center p-3 gap-3" style="cursor:pointer;"
+           onclick="toggleLocCard({{ loc.id }})">
+        <!-- Order controls -->
+        <div class="d-flex flex-column gap-1 flex-shrink-0">
+          <form method="POST" action="{{ url_for('admin_opdrachten_move', loc_id=loc.id) }}" class="m-0">
+            <input type="hidden" name="direction" value="up">
+            <button type="submit" class="btn btn-sm btn-outline-secondary p-0 px-1"
+                    {% if loop.first %}disabled{% endif %}
+                    title="Omhoog" onclick="event.stopPropagation()">▲</button>
+          </form>
+          <form method="POST" action="{{ url_for('admin_opdrachten_move', loc_id=loc.id) }}" class="m-0">
+            <input type="hidden" name="direction" value="down">
+            <button type="submit" class="btn btn-sm btn-outline-secondary p-0 px-1"
+                    {% if loop.last %}disabled{% endif %}
+                    title="Omlaag" onclick="event.stopPropagation()">▼</button>
+          </form>
+        </div>
+
+        <!-- Step badge -->
+        <div class="step-badge bg-primary text-white flex-shrink-0">{{ loop.index }}</div>
+
+        <!-- Emoji + Name -->
+        <div class="fs-5 flex-shrink-0">{{ loc.emoji }}</div>
+        <div class="flex-fill min-width-0">
+          <div class="fw-bold">{{ loc.name }}</div>
+          <div class="text-muted small text-truncate" style="max-width:400px;">
+            {{ loc.challenge[:80] }}{% if loc.challenge|length > 80 %}…{% endif %}
+          </div>
+        </div>
+
+        <!-- Answer type badge -->
+        <span class="badge {% if loc.answer_type == 'photo' %}bg-warning text-dark{% else %}bg-info text-dark{% endif %} flex-shrink-0">
+          {% if loc.answer_type == 'photo' %}📷 Foto{% else %}🔑 Code{% endif %}
+        </span>
+
+        <!-- Expand chevron -->
+        <i class="bi bi-chevron-down flex-shrink-0 text-muted" id="chev-{{ loc.id }}"></i>
+      </div>
+
+      <!-- Expanded edit form -->
+      <div id="locBody-{{ loc.id }}" style="display:none; border-top:1px solid #eee;">
+        <form method="POST" action="{{ url_for('admin_opdrachten_edit', loc_id=loc.id) }}" class="p-4">
+          <div class="row g-3">
+            <div class="col-sm-2">
+              <label class="form-label fw-semibold">Emoji</label>
+              <input type="text" name="emoji" value="{{ loc.emoji }}" class="form-control text-center fs-4" maxlength="4">
+            </div>
+            <div class="col-sm-10">
+              <label class="form-label fw-semibold">Naam van de locatie</label>
+              <input type="text" name="name" value="{{ loc.name }}" class="form-control" required>
+            </div>
+
+            <div class="col-12">
+              <label class="form-label fw-semibold">
+                Aanwijzing <span class="text-muted fw-normal">(route-hint voor het team om de locatie te vinden)</span>
+              </label>
+              <textarea name="clue" class="form-control" rows="3">{{ loc.clue }}</textarea>
+            </div>
+
+            <div class="col-12">
+              <label class="form-label fw-semibold">
+                Opdracht <span class="text-muted fw-normal">(wat moeten de teams doen ter plaatse?)</span>
+              </label>
+              <textarea name="challenge" class="form-control" rows="4">{{ loc.challenge }}</textarea>
+            </div>
+
+            <div class="col-12">
+              <label class="form-label fw-semibold">
+                Aankomstbevestiging <span class="text-muted fw-normal">(optioneel: extra info die getoond wordt bij aankomst)</span>
+              </label>
+              <input type="text" name="arrival_hint" value="{{ loc.arrival_hint or '' }}" class="form-control"
+                     placeholder="bv. 'Jullie staan voor het stadhuis!'">
+            </div>
+
+            <!-- Answer type toggle -->
+            <div class="col-sm-6">
+              <label class="form-label fw-semibold">Antwoordtype</label>
+              <div class="d-flex gap-2">
+                <div class="form-check form-check-inline">
+                  <input class="form-check-input" type="radio" name="answer_type" value="code"
+                         id="type_code_{{ loc.id }}" {% if loc.answer_type == 'code' %}checked{% endif %}
+                         onchange="toggleCodeField({{ loc.id }}, this.value)">
+                  <label class="form-check-label" for="type_code_{{ loc.id }}">🔑 Geheime code</label>
+                </div>
+                <div class="form-check form-check-inline">
+                  <input class="form-check-input" type="radio" name="answer_type" value="photo"
+                         id="type_photo_{{ loc.id }}" {% if loc.answer_type == 'photo' %}checked{% endif %}
+                         onchange="toggleCodeField({{ loc.id }}, this.value)">
+                  <label class="form-check-label" for="type_photo_{{ loc.id }}">📷 Foto inzending</label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Secret code field (only for 'code' type) -->
+            <div class="col-sm-6" id="codeField-{{ loc.id }}"
+                 style="{% if loc.answer_type != 'code' %}display:none;{% endif %}">
+              <label class="form-label fw-semibold">Geheime code</label>
+              <div class="input-group">
+                <input type="text" name="secret_code"
+                       value="{{ loc.secret_code or '' }}"
+                       class="form-control font-monospace text-uppercase fw-bold"
+                       placeholder="bv. AALST"
+                       maxlength="20"
+                       oninput="this.value=this.value.toUpperCase()"
+                       id="codeInput-{{ loc.id }}">
+                <button type="button" class="btn btn-outline-secondary"
+                        onclick="document.getElementById('codeInput-{{ loc.id }}').value = randomCode()">
+                  <i class="bi bi-arrow-repeat"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="d-flex gap-2 mt-4 pt-3 border-top">
+            <button type="submit" class="btn btn-success fw-semibold px-4">
+              <i class="bi bi-save me-2"></i>Opslaan
+            </button>
+            <button type="button" class="btn btn-outline-secondary"
+                    onclick="toggleLocCard({{ loc.id }})">Annuleren</button>
+            <form method="POST" action="{{ url_for('admin_opdrachten_delete', loc_id=loc.id) }}"
+                  class="ms-auto"
+                  onsubmit="return confirm('Locatie \'{{ loc.name }}\' verwijderen? Dit kan niet ongedaan worden.')">
+              <button type="submit" class="btn btn-outline-danger">
+                <i class="bi bi-trash me-2"></i>Verwijderen
+              </button>
+            </form>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="text-center mt-3">
+  <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addModal">
+    <i class="bi bi-plus-circle me-2"></i>Nog een locatie toevoegen
+  </button>
+</div>
+{% endif %}
+
+
+<!-- Add modal -->
+<div class="modal fade" id="addModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('admin_opdrachten_add') }}">
+        <div class="modal-header">
+          <h5 class="modal-title fw-bold"><i class="bi bi-plus-circle me-2"></i>Nieuwe locatie / ronde</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-sm-2">
+              <label class="form-label fw-semibold">Emoji</label>
+              <input type="text" name="emoji" value="📍" class="form-control text-center fs-4" maxlength="4">
+            </div>
+            <div class="col-sm-10">
+              <label class="form-label fw-semibold">Naam van de locatie</label>
+              <input type="text" name="name" class="form-control" placeholder="bv. Grote Markt" required>
+            </div>
+
+            <div class="col-12">
+              <label class="form-label fw-semibold">Aanwijzing</label>
+              <textarea name="clue" class="form-control" rows="3"
+                        placeholder="De hint die teams te zien krijgen om deze locatie te vinden…"></textarea>
+            </div>
+
+            <div class="col-12">
+              <label class="form-label fw-semibold">Opdracht</label>
+              <textarea name="challenge" class="form-control" rows="4"
+                        placeholder="Wat moeten de teams doen zodra ze aankomen?"></textarea>
+            </div>
+
+            <div class="col-12">
+              <label class="form-label fw-semibold">Aankomstbevestiging <span class="text-muted fw-normal">(optioneel)</span></label>
+              <input type="text" name="arrival_hint" class="form-control"
+                     placeholder="bv. 'Goed gedaan, jullie staan voor het stadhuis!'">
+            </div>
+
+            <div class="col-sm-6">
+              <label class="form-label fw-semibold">Antwoordtype</label>
+              <div class="d-flex gap-3">
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="answer_type" value="code"
+                         id="new_type_code" checked onchange="toggleNewCodeField(this.value)">
+                  <label class="form-check-label" for="new_type_code">🔑 Geheime code</label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="answer_type" value="photo"
+                         id="new_type_photo" onchange="toggleNewCodeField(this.value)">
+                  <label class="form-check-label" for="new_type_photo">📷 Foto inzending</label>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-sm-6" id="newCodeField">
+              <label class="form-label fw-semibold">Geheime code</label>
+              <div class="input-group">
+                <input type="text" name="secret_code" id="newCodeInput"
+                       class="form-control font-monospace text-uppercase fw-bold"
+                       placeholder="bv. LEEUW" maxlength="20"
+                       oninput="this.value=this.value.toUpperCase()">
+                <button type="button" class="btn btn-outline-secondary"
+                        onclick="document.getElementById('newCodeInput').value = randomCode()">
+                  <i class="bi bi-arrow-repeat"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuleren</button>
+          <button type="submit" class="btn btn-primary fw-semibold px-4">
+            <i class="bi bi-plus-circle me-2"></i>Toevoegen
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleLocCard(id) {
+  const body = document.getElementById('locBody-' + id);
+  const chev = document.getElementById('chev-' + id);
+  if (body.style.display === 'none') {
+    body.style.display = 'block';
+    chev.classList.replace('bi-chevron-down', 'bi-chevron-up');
+  } else {
+    body.style.display = 'none';
+    chev.classList.replace('bi-chevron-up', 'bi-chevron-down');
+  }
+}
+
+function toggleCodeField(id, value) {
+  document.getElementById('codeField-' + id).style.display = value === 'code' ? '' : 'none';
+}
+
+function toggleNewCodeField(value) {
+  document.getElementById('newCodeField').style.display = value === 'code' ? '' : 'none';
+}
+
+function randomCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  return Array.from({length: 6}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+}
+</script>
+{% endblock %}

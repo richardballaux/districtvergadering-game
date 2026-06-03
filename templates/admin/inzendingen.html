@@ -1,0 +1,191 @@
+{% extends "base_admin.html" %}
+{% block title %}Inzendingen – Stadsspel Aalst{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-4">
+  <div>
+    <h2 class="fw-bold mb-0">Foto-inzendingen</h2>
+    <p class="text-muted mb-0">Beoordeel foto's die teams insturen als antwoord op opdrachten.</p>
+  </div>
+  {% if pending_count > 0 %}
+  <span class="badge bg-danger fs-6 px-3 py-2 ms-auto">{{ pending_count }} wacht op beoordeling</span>
+  {% endif %}
+</div>
+
+<!-- Filter tabs -->
+<ul class="nav nav-pills mb-4">
+  <li class="nav-item">
+    <a class="nav-link {% if filter_status == 'pending' %}active{% endif %}"
+       href="{{ url_for('admin_inzendingen', status='pending') }}">
+      ⏳ In afwachting
+      {% if pending_count > 0 %}<span class="badge bg-danger ms-1">{{ pending_count }}</span>{% endif %}
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if filter_status == 'approved' %}active{% endif %}"
+       href="{{ url_for('admin_inzendingen', status='approved') }}">
+      ✅ Goedgekeurd
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if filter_status == 'rejected' %}active{% endif %}"
+       href="{{ url_for('admin_inzendingen', status='rejected') }}">
+      ❌ Afgekeurd
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if filter_status == 'all' %}active{% endif %}"
+       href="{{ url_for('admin_inzendingen', status='all') }}">
+      📋 Alles
+    </a>
+  </li>
+</ul>
+
+{% if not submissions %}
+<div class="card">
+  <div class="card-body text-center p-5">
+    <div class="fs-1 mb-3">📷</div>
+    <h5 class="text-muted">
+      {% if filter_status == 'pending' %}Geen inzendingen in afwachting
+      {% elif filter_status == 'approved' %}Nog niets goedgekeurd
+      {% elif filter_status == 'rejected' %}Nog niets afgekeurd
+      {% else %}Nog geen inzendingen
+      {% endif %}
+    </h5>
+    <p class="text-muted small">Teams sturen foto's in zodra ze een foto-opdracht bereiken.</p>
+  </div>
+</div>
+{% else %}
+<div class="row g-3">
+  {% for sub in submissions %}
+  {% set team = teams[sub.team_id] %}
+  {% set loc = locations[sub.location_id] %}
+  <div class="col-sm-6 col-xl-4">
+    <div class="card h-100" style="border-top: 4px solid {{ team.color if team else '#aaa' }};">
+      <div class="card-body p-3 d-flex flex-column gap-2">
+
+        <!-- Header -->
+        <div class="d-flex align-items-center gap-2">
+          <span class="fw-bold" style="color:{{ team.color if team else '#aaa' }}">
+            {{ team.name if team else 'Onbekend team' }}
+          </span>
+          <span class="ms-auto badge
+            {% if sub.status == 'pending' %}bg-warning text-dark
+            {% elif sub.status == 'approved' %}bg-success
+            {% else %}bg-danger
+            {% endif %}">
+            {% if sub.status == 'pending' %}⏳ Wacht
+            {% elif sub.status == 'approved' %}✅ Goed
+            {% else %}❌ Afgekeurd
+            {% endif %}
+          </span>
+        </div>
+
+        <!-- Location + sender -->
+        <div class="small text-muted">
+          <i class="bi bi-geo-alt me-1"></i>{{ loc.emoji if loc else '' }} {{ loc.name if loc else 'Onbekend' }}
+          &nbsp;·&nbsp;
+          <i class="bi bi-person me-1"></i>{{ sub.participant_name }}
+        </div>
+        <div class="small text-muted">
+          <i class="bi bi-clock me-1"></i>{{ sub.submitted_at.strftime('%H:%M') }}
+          {% if sub.reviewed_at %}
+          &nbsp;·&nbsp;beoordeeld om {{ sub.reviewed_at.strftime('%H:%M') }}
+          {% endif %}
+        </div>
+
+        <!-- Photo -->
+        <div class="text-center my-1" style="flex-shrink:0;">
+          <img src="{{ url_for('uploaded_file', filename=sub.photo_filename) }}"
+               alt="inzending"
+               style="max-width:100%; max-height:200px; border-radius:8px; cursor:pointer; object-fit:cover;"
+               onclick="openLightbox(this.src)">
+        </div>
+
+        <!-- Caption -->
+        {% if sub.caption %}
+        <div class="small fst-italic text-muted border-start border-3 ps-2">
+          "{{ sub.caption }}"
+        </div>
+        {% endif %}
+
+        <!-- Feedback (rejected) -->
+        {% if sub.status == 'rejected' and sub.feedback %}
+        <div class="alert alert-danger py-2 px-3 mb-0 small">
+          <i class="bi bi-chat-left-text me-1"></i><strong>Feedback:</strong> {{ sub.feedback }}
+        </div>
+        {% endif %}
+
+        <!-- Action buttons -->
+        {% if sub.status == 'pending' %}
+        <div class="mt-auto pt-2 d-flex flex-column gap-2">
+          <!-- Approve -->
+          <form method="POST" action="{{ url_for('admin_approve_submission', sub_id=sub.id) }}">
+            <button type="submit" class="btn btn-success w-100 fw-semibold">
+              <i class="bi bi-check-circle me-2"></i>Goedkeuren &amp; team verder
+            </button>
+          </form>
+
+          <!-- Reject with feedback -->
+          <button type="button" class="btn btn-outline-danger w-100"
+                  onclick="toggleRejectForm({{ sub.id }})">
+            <i class="bi bi-x-circle me-2"></i>Afkeuren met feedback
+          </button>
+          <div id="rejectForm-{{ sub.id }}" style="display:none;">
+            <form method="POST" action="{{ url_for('admin_reject_submission', sub_id=sub.id) }}">
+              <textarea name="feedback" class="form-control mb-2" rows="2"
+                        placeholder="Vertel het team wat er niet klopt…" required></textarea>
+              <button type="submit" class="btn btn-danger w-100 fw-semibold">
+                <i class="bi bi-send me-2"></i>Feedback versturen
+              </button>
+            </form>
+          </div>
+        </div>
+        {% endif %}
+
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Lightbox -->
+<div id="lightbox" onclick="closeLightbox()"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:1000;
+            align-items:center;justify-content:center;">
+  <img id="lightboxImg" src="" alt=""
+       style="max-width:90vw;max-height:90vh;border-radius:8px;">
+  <button onclick="closeLightbox()"
+          style="position:absolute;top:1rem;right:1rem;background:rgba(255,255,255,.2);
+                 border:none;color:#fff;border-radius:50%;width:36px;height:36px;font-size:1.1rem;">✕</button>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function openLightbox(src) {
+  const lb = document.getElementById('lightbox');
+  document.getElementById('lightboxImg').src = src;
+  lb.style.display = 'flex';
+}
+function closeLightbox() {
+  document.getElementById('lightbox').style.display = 'none';
+}
+function toggleRejectForm(id) {
+  const el = document.getElementById('rejectForm-' + id);
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+// Auto-refresh pending tab every 15s
+{% if filter_status == 'pending' %}
+setInterval(() => {
+  fetch('{{ url_for("admin_submissions_count") }}')
+    .then(r => r.json())
+    .then(data => {
+      if (data.pending > 0) document.title = `(${data.pending}) Inzendingen – Stadsspel Aalst`;
+    }).catch(() => {});
+}, 15000);
+{% endif %}
+</script>
+{% endblock %}

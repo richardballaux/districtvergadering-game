@@ -37,6 +37,14 @@
         <a class="nav-link {% if request.endpoint == 'admin_groups' %}active{% endif %}" href="{{ url_for('admin_groups') }}">
           <i class="bi bi-people me-2"></i>Teams
         </a>
+        <a class="nav-link {% if request.endpoint == 'admin_opdrachten' or request.endpoint and request.endpoint.startswith('admin_opdrachten') %}active{% endif %}" href="{{ url_for('admin_opdrachten') }}">
+          <i class="bi bi-list-task me-2"></i>Opdrachten
+        </a>
+        <a class="nav-link {% if request.endpoint == 'admin_inzendingen' or request.endpoint == 'admin_approve_submission' or request.endpoint == 'admin_reject_submission' %}active{% endif %} position-relative" href="{{ url_for('admin_inzendingen') }}">
+          <i class="bi bi-camera me-2"></i>Inzendingen
+          <span id="sidebarSubmissionBadge" class="badge bg-warning text-dark position-absolute top-50 end-0 translate-middle-y me-2"
+                style="font-size:.65rem; display:none;"></span>
+        </a>
         <a class="nav-link {% if request.endpoint == 'admin_settings' %}active{% endif %}" href="{{ url_for('admin_settings') }}">
           <i class="bi bi-gear me-2"></i>Instellingen
         </a>
@@ -129,13 +137,24 @@ async function pollUnreadBadge() {
     const res = await fetch('{{ url_for("admin_messages_unread") }}');
     const data = await res.json();
 
-    // Sidebar badge
+    // Sidebar message badge
     const badge = document.getElementById('sidebarUnreadBadge');
     if (data.total > 0) {
       badge.textContent = data.total;
       badge.style.display = 'inline-flex';
     } else {
       badge.style.display = 'none';
+    }
+
+    // Sidebar submissions badge
+    const subBadge = document.getElementById('sidebarSubmissionBadge');
+    if (subBadge) {
+      if (data.pending_submissions > 0) {
+        subBadge.textContent = data.pending_submissions;
+        subBadge.style.display = 'inline-flex';
+      } else {
+        subBadge.style.display = 'none';
+      }
     }
 
     // Detect new messages since last poll

@@ -81,9 +81,15 @@
       <a href="{{ url_for('admin_game') }}" class="btn btn-outline-success">
         <i class="bi bi-play-circle me-2"></i>Spel beheren
       </a>
-      <a href="{{ url_for('admin_settings') }}" class="btn btn-outline-warning">
-        <i class="bi bi-gear me-2"></i>Codes instellen
+      <a href="{{ url_for('admin_opdrachten') }}" class="btn btn-outline-warning">
+        <i class="bi bi-list-task me-2"></i>Opdrachten
       </a>
+      {% if pending_submissions > 0 %}
+      <a href="{{ url_for('admin_inzendingen') }}" class="btn btn-warning position-relative">
+        <i class="bi bi-camera me-2"></i>Inzendingen
+        <span class="badge bg-danger ms-1">{{ pending_submissions }}</span>
+      </a>
+      {% endif %}
     </div>
   </div>
 </div>
@@ -96,7 +102,7 @@
       {% set steps = [
         ("1", "CSV uploaden", "Laad de deelnemerslijst (voornaam, achternaam, leoclub)", "upload", "primary"),
         ("2", "Teams maken", "Kies het aantal teams, het systeem verdeelt automatisch", "groups", "primary"),
-        ("3", "Codes instellen", "Stel de geheime codes in voor elke locatie in Aalst", "settings", "warning"),
+        ("3", "Opdrachten", "Beheer de locaties, aanwijzingen en geheime codes", "opdrachten", "warning"),
         ("4", "QR-code tonen", "Projecteer de QR-code op een beamerscherm", "qr", "dark"),
         ("5", "Spel starten", "Geef het startsein en volg de voortgang live", "game", "success"),
       ] %}
@@ -129,7 +135,7 @@
             {% if team.finished %}
             <span class="badge bg-success ms-auto">Klaar! 🎉</span>
             {% else %}
-            <span class="badge bg-light text-dark ms-auto">Stap {{ team.current_step }}/{{ locations|length }}</span>
+            <span class="badge bg-light text-dark ms-auto">Stap {{ team.current_step }}/{{ team.total_steps }}</span>
             {% endif %}
           </div>
           <div class="progress mb-2" style="height:6px;">

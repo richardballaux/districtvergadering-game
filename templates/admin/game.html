@@ -84,7 +84,7 @@
             {% if team.finished %}
             <span class="badge bg-success">🎉 Klaar!</span>
             {% elif settings.game_started %}
-            <span class="badge bg-primary">Stap {{ team.current_step }}/{{ locations|length }}</span>
+            <span class="badge bg-primary">Stap {{ team.current_step }}/{{ team.total_steps }}</span>
             {% else %}
             <span class="badge bg-secondary">Wacht…</span>
             {% endif %}
@@ -113,7 +113,7 @@
         <div class="mb-3 small text-muted">
           <strong>Route:</strong>
           {% for loc_id in team.route %}
-          {% set loc = locations[loc_id] %}
+          {% set loc = locations_by_id[loc_id] %}
           <span class="{% if loop.index0 < team.current_step %}text-success{% elif loop.index0 == team.current_step and not team.finished %}fw-bold text-dark{% else %}text-muted{% endif %}">
             {{ loc.emoji }}
             {% if loop.index0 < team.current_step %}✓{% endif %}
@@ -149,7 +149,7 @@
 <!-- Location overview -->
 <h5 class="fw-semibold mt-4 mb-3">📍 Locatie-overzicht</h5>
 <div class="row g-3">
-  {% for loc in locations %}
+  {% for loc in locations_by_id.values() %}
   <div class="col-sm-6 col-xl-3">
     <div class="card">
       <div class="card-body p-3">

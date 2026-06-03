@@ -54,6 +54,8 @@
       border-radius: 12px;
       padding: 1rem; font-size: .95rem; line-height: 1.6; color: #333;
     }
+
+    /* Code input */
     .code-input {
       font-family: 'Courier New', monospace;
       font-size: 1.5rem; font-weight: 700; text-align: center;
@@ -62,6 +64,8 @@
       width: 100%; transition: border-color .2s;
     }
     .code-input:focus { border-color: {{ team.color }}; outline: none; box-shadow: 0 0 0 3px {{ team.color }}33; }
+
+    /* Submit button */
     .btn-submit {
       background: {{ team.color }}; border: none; border-radius: 14px; color: #fff;
       font-weight: 700; font-size: 1.05rem; padding: .85rem; width: 100%;
@@ -69,6 +73,36 @@
     }
     .btn-submit:hover { opacity: .9; transform: translateY(-1px); color: #fff; }
     .btn-submit:disabled { opacity: .5; }
+
+    /* Photo submission */
+    .photo-upload-area {
+      border: 2.5px dashed {{ team.color }}88;
+      border-radius: 16px;
+      padding: 2rem 1rem;
+      text-align: center;
+      cursor: pointer;
+      transition: background .2s, border-color .2s;
+      background: {{ team.color }}08;
+    }
+    .photo-upload-area:hover { background: {{ team.color }}15; border-color: {{ team.color }}; }
+    .submission-preview {
+      max-width: 100%;
+      max-height: 220px;
+      border-radius: 12px;
+      object-fit: contain;
+      display: block;
+      margin: 0 auto .75rem;
+    }
+    .pending-badge {
+      background: #fff3cd; border: 2px solid #ffc107;
+      border-radius: 14px; padding: 1.25rem;
+      text-align: center; color: #856404;
+    }
+    .rejected-badge {
+      background: #f8d7da; border: 2px solid #dc3545;
+      border-radius: 14px; padding: 1.25rem;
+      color: #721c24;
+    }
 
     /* Waiting */
     .waiting-screen {
@@ -118,10 +152,8 @@
       background: #e74c3c; color: #fff;
       border-radius: 50%; width: 20px; height: 20px;
       font-size: .7rem; font-weight: 700;
-      display: flex; align-items: center; justify-content: center;
-      display: none;
+      display: none; align-items: center; justify-content: center;
     }
-
     .chat-panel {
       position: fixed; inset: 0; z-index: 300;
       display: flex; flex-direction: column;
@@ -130,7 +162,6 @@
       transition: transform .3s ease;
     }
     .chat-panel.open { transform: translateY(0); }
-
     .chat-topbar {
       background: {{ team.color }}; color: #fff;
       padding: 1rem 1.25rem;
@@ -138,18 +169,14 @@
     }
     .chat-topbar .title { font-weight: 700; font-size: 1rem; }
     .chat-close { background: rgba(255,255,255,.2); border: none; border-radius: 8px; color:#fff; padding:.3rem .8rem; }
-
     .chat-messages {
       flex: 1; overflow-y: auto; padding: 1rem;
       display: flex; flex-direction: column; gap: .6rem;
     }
     .chat-bubble {
-      max-width: 80%;
-      padding: .6rem .9rem;
-      border-radius: 16px;
-      font-size: .9rem;
-      line-height: 1.45;
-      word-break: break-word;
+      max-width: 80%; padding: .6rem .9rem;
+      border-radius: 16px; font-size: .9rem;
+      line-height: 1.45; word-break: break-word;
     }
     .bubble-admin {
       background: #fff; color: #1a1a2e;
@@ -163,18 +190,11 @@
       align-self: flex-end;
     }
     .bubble-meta { font-size: .7rem; opacity: .6; margin-top: .2rem; }
-    .bubble-photo {
-      max-width: 200px; border-radius: 10px; margin-top: .3rem;
-      cursor: pointer; display: block;
-    }
-    .chat-empty {
-      text-align: center; color: #999; padding: 3rem 1rem; font-size: .9rem;
-    }
-
+    .bubble-photo { max-width: 200px; border-radius: 10px; margin-top: .3rem; cursor: pointer; display: block; }
+    .chat-empty { text-align: center; color: #999; padding: 3rem 1rem; font-size: .9rem; }
     .chat-input-bar {
       background: #fff; border-top: 1px solid #eee;
-      padding: .75rem;
-      display: flex; flex-direction: column; gap: .5rem;
+      padding: .75rem; display: flex; flex-direction: column; gap: .5rem;
     }
     .chat-input-row { display: flex; align-items: flex-end; gap: .5rem; }
     .chat-textarea {
@@ -206,8 +226,7 @@
     /* Lightbox */
     .lightbox {
       position: fixed; inset: 0; background: rgba(0,0,0,.9); z-index: 500;
-      display: flex; align-items: center; justify-content: center;
-      display: none;
+      display: none; align-items: center; justify-content: center;
     }
     .lightbox img { max-width: 95vw; max-height: 90vh; border-radius: 8px; }
     .lightbox-close {
@@ -228,7 +247,7 @@
     </div>
     <div class="text-end">
       <div class="step-count" id="stepCount">
-        {% if team.finished %}Klaar!{% else %}{{ team.current_step }}/{{ locations|length }}{% endif %}
+        {% if team.finished %}Klaar!{% else %}{{ team.current_step }}/{{ team.total_steps }}{% endif %}
       </div>
     </div>
   </div>
@@ -276,11 +295,13 @@
       {% if team.current_location %}{{ team.current_location.challenge }}{% endif %}
     </div>
     <p class="text-muted small mt-2 mb-0">
-      💡 <span id="hintText">{% if team.current_location %}{{ team.current_location.arrival_hint }}{% endif %}</span>
+      💡 <span id="hintText">{% if team.current_location %}{{ team.current_location.arrival_hint or '' }}{% endif %}</span>
     </p>
   </div>
 
-  <div class="card-section">
+  <!-- Code answer section -->
+  <div class="card-section" id="codeSection"
+       style="display:{% if team.current_location and team.current_location.answer_type == 'code' %}block{% else %}none{% endif %};">
     <div class="section-label">🔐 Geheime code</div>
     <p class="text-muted small mb-3">Vul de code in die je bij de locatie gevonden hebt:</p>
     <input type="text" class="code-input" id="codeInput" placeholder="CODE"
@@ -290,6 +311,64 @@
       Bevestigen →
     </button>
   </div>
+
+  <!-- Photo answer section -->
+  <div class="card-section" id="photoSection"
+       style="display:{% if team.current_location and team.current_location.answer_type == 'photo' %}block{% else %}none{% endif %};">
+    <div class="section-label">📷 Foto-opdracht</div>
+
+    <!-- Pending state -->
+    <div id="photoPending" style="display:none;">
+      <div class="pending-badge">
+        <div style="font-size:2rem; margin-bottom:.5rem;">⏳</div>
+        <div class="fw-bold mb-1">Foto ingediend!</div>
+        <div class="small">De begeleider beoordeelt jullie inzending. Even geduld…</div>
+      </div>
+    </div>
+
+    <!-- Rejected state -->
+    <div id="photoRejected" style="display:none;">
+      <div class="rejected-badge mb-3">
+        <div style="font-size:1.5rem; margin-bottom:.4rem;">❌ Afgekeurd</div>
+        <div class="fw-bold mb-1">Feedback van de begeleider:</div>
+        <div class="small" id="rejectionFeedback"></div>
+      </div>
+      <!-- Fall through to upload UI for resubmission -->
+    </div>
+
+    <!-- Upload UI (shown when no pending/approved submission) -->
+    <div id="photoUploadUI">
+      <p class="text-muted small mb-3">Maak een foto als bewijs van jullie opdracht en dien ze in:</p>
+
+      <!-- Preview before submit -->
+      <div id="submissionPreviewWrap" style="display:none; margin-bottom:.75rem;">
+        <img id="submissionPreview" class="submission-preview" src="" alt="">
+        <div class="mb-2">
+          <textarea id="captionInput" class="form-control form-control-sm"
+                    rows="2" placeholder="Optionele beschrijving (wat te zien is op de foto)…"
+                    style="border-radius:10px;"></textarea>
+        </div>
+      </div>
+
+      <div class="photo-upload-area" id="photoDropArea"
+           onclick="document.getElementById('submissionPhotoInput').click()">
+        <div id="dropAreaContent">
+          <div style="font-size:2.5rem; margin-bottom:.5rem;">📸</div>
+          <div class="fw-semibold mb-1">Foto kiezen of maken</div>
+          <div class="text-muted small">Tik hier om de camera te openen</div>
+        </div>
+      </div>
+      <input type="file" id="submissionPhotoInput" accept="image/*" capture="environment"
+             style="display:none" onchange="previewSubmissionPhoto(this)">
+
+      <button class="btn-submit" id="submitPhotoBtn"
+              style="display:none; margin-top:.75rem;"
+              onclick="submitPhoto()">
+        📤 Foto indienen
+      </button>
+    </div>
+  </div>
+
 </div>
 
 <!-- FINISHED STATE -->
@@ -306,12 +385,7 @@
   <div class="card-section text-center">
     <div class="fs-2 mb-2">🏆</div>
     <h5 class="fw-bold">{{ team.name }}</h5>
-    <p class="text-muted">Alle {{ locations|length }} locaties bezocht!</p>
-    <div class="d-flex justify-content-center gap-2 flex-wrap mt-2">
-      {% for loc in locations %}
-      <span class="badge bg-success fs-6 px-3 py-2">{{ loc.emoji }} {{ loc.name }}</span>
-      {% endfor %}
-    </div>
+    <p class="text-muted">Alle {{ team.total_steps }} locaties bezocht!</p>
   </div>
 </div>
 
@@ -356,11 +430,11 @@
       <button class="chat-send-btn" onclick="sendMessage()" title="Verzenden">➤</button>
     </div>
     <div class="d-flex gap-2">
-      <button class="photo-attach-btn" onclick="document.getElementById('photoInput').click()">
+      <button class="photo-attach-btn" onclick="document.getElementById('chatPhotoInput').click()">
         📷 Foto toevoegen
       </button>
-      <input type="file" id="photoInput" accept="image/*" style="display:none"
-             onchange="previewPhoto(this)">
+      <input type="file" id="chatPhotoInput" accept="image/*" style="display:none"
+             onchange="previewChatPhoto(this)">
     </div>
   </div>
 </div>
@@ -374,11 +448,14 @@
 <script>
 const TEAM_COLOR = '{{ team.color }}';
 let currentStep = {{ team.current_step }};
+let totalSteps = {{ team.total_steps }};
 let isFinished = {{ 'true' if team.finished else 'false' }};
 let gameStarted = {{ 'true' if settings.game_started else 'false' }};
 let chatOpen = false;
-let lastMessageId = 0;
-let selectedPhoto = null;
+let selectedChatPhoto = null;
+let selectedSubmissionPhoto = null;
+let currentAnswerType = '{{ team.current_location.answer_type if team.current_location else "code" }}';
+let currentSubmissionStatus = null;
 
 // ── Toast ──────────────────────────────────────────────────────────────────
 function showToast(msg, type = '') {
@@ -423,8 +500,8 @@ async function submitCode() {
         document.getElementById('locationEmoji').textContent = data.next_emoji;
         document.getElementById('locationName').textContent = data.next_location;
         document.getElementById('clueText').textContent = data.next_clue;
-        document.getElementById('progressBar').style.width = ((currentStep / {{ locations|length }}) * 100) + '%';
-        document.getElementById('stepCount').textContent = currentStep + '/{{ locations|length }}';
+        document.getElementById('progressBar').style.width = ((currentStep / totalSteps) * 100) + '%';
+        document.getElementById('stepCount').textContent = currentStep + '/' + totalSteps;
         pollStatus();
       }
     } else {
@@ -447,6 +524,116 @@ document.getElementById('codeInput').addEventListener('keydown', e => {
     inp.value = inp.value.toUpperCase();
   }, 0);
 });
+
+// ── Photo submission ───────────────────────────────────────────────────────
+function previewSubmissionPhoto(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('submissionPreview').src = e.target.result;
+    document.getElementById('submissionPreviewWrap').style.display = 'block';
+    document.getElementById('dropAreaContent').innerHTML =
+      '<div class="small text-muted">Klik om andere foto te kiezen</div>';
+    document.getElementById('submitPhotoBtn').style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+
+  compressImage(file).then(blob => { selectedSubmissionPhoto = blob; });
+}
+
+async function submitPhoto() {
+  const btn = document.getElementById('submitPhotoBtn');
+  if (!selectedSubmissionPhoto) {
+    showToast('Kies eerst een foto.', 'error');
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = 'Indienen…';
+
+  const fd = new FormData();
+  fd.append('photo', selectedSubmissionPhoto, 'opdracht.jpg');
+  const caption = document.getElementById('captionInput').value.trim();
+  if (caption) fd.append('caption', caption);
+
+  try {
+    const res = await fetch('/game/submit-photo', {method: 'POST', body: fd});
+    const data = await res.json();
+    if (data.success) {
+      showToast(data.message, 'success');
+      currentSubmissionStatus = 'pending';
+      renderPhotoSection('pending', null);
+    } else {
+      showToast(data.message || 'Fout bij indienen.', 'error');
+    }
+  } catch(e) {
+    showToast('Verbindingsfout. Probeer opnieuw.', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📤 Foto indienen';
+  }
+}
+
+function renderPhotoSection(status, feedback) {
+  const pending = document.getElementById('photoPending');
+  const rejected = document.getElementById('photoRejected');
+  const uploadUI = document.getElementById('photoUploadUI');
+
+  if (status === 'pending') {
+    pending.style.display = 'block';
+    rejected.style.display = 'none';
+    uploadUI.style.display = 'none';
+  } else if (status === 'rejected') {
+    pending.style.display = 'none';
+    rejected.style.display = 'block';
+    document.getElementById('rejectionFeedback').textContent = feedback || '';
+    uploadUI.style.display = 'block';
+    // Reset upload UI
+    selectedSubmissionPhoto = null;
+    document.getElementById('submissionPreviewWrap').style.display = 'none';
+    document.getElementById('submitPhotoBtn').style.display = 'none';
+    document.getElementById('dropAreaContent').innerHTML = `
+      <div style="font-size:2.5rem; margin-bottom:.5rem;">📸</div>
+      <div class="fw-semibold mb-1">Opnieuw indienen</div>
+      <div class="text-muted small">Tik hier om een nieuwe foto te kiezen</div>`;
+    document.getElementById('captionInput').value = '';
+  } else {
+    pending.style.display = 'none';
+    rejected.style.display = 'none';
+    uploadUI.style.display = 'block';
+  }
+}
+
+// Initialise photo section on page load
+(function initPhotoSection() {
+  {% if team.current_location and team.current_location.answer_type == 'photo' %}
+  {% set sub = team.current_submission(team.current_location.id) %}
+  {% if sub and sub.status == 'pending' %}
+  currentSubmissionStatus = 'pending';
+  renderPhotoSection('pending', null);
+  {% elif sub and sub.status == 'rejected' %}
+  currentSubmissionStatus = 'rejected';
+  renderPhotoSection('rejected', {{ sub.feedback|tojson }});
+  {% endif %}
+  {% endif %}
+})();
+
+// ── Switch between answer sections ─────────────────────────────────────────
+function switchAnswerType(type, submissionStatus, feedback) {
+  currentAnswerType = type;
+  currentSubmissionStatus = submissionStatus;
+
+  if (type === 'code') {
+    document.getElementById('codeSection').style.display = 'block';
+    document.getElementById('photoSection').style.display = 'none';
+  } else {
+    document.getElementById('codeSection').style.display = 'none';
+    document.getElementById('photoSection').style.display = 'block';
+    renderPhotoSection(submissionStatus, feedback);
+  }
+}
 
 // ── Game status polling ────────────────────────────────────────────────────
 async function pollStatus() {
@@ -471,13 +658,33 @@ async function pollStatus() {
     if (data.location_emoji) document.getElementById('locationEmoji').textContent = data.location_emoji;
     if (data.clue) document.getElementById('clueText').textContent = data.clue;
     if (data.challenge) document.getElementById('challengeText').textContent = data.challenge;
-    if (data.arrival_hint) document.getElementById('hintText').textContent = data.arrival_hint;
+    if (typeof data.arrival_hint !== 'undefined') document.getElementById('hintText').textContent = data.arrival_hint || '';
     if (typeof data.progress_pct === 'number') {
       document.getElementById('progressBar').style.width = data.progress_pct + '%';
     }
     if (typeof data.current_step === 'number') {
+      currentStep = data.current_step;
+      if (typeof data.total_steps === 'number') totalSteps = data.total_steps;
       document.getElementById('stepCount').textContent =
-        data.finished ? 'Klaar!' : data.current_step + '/{{ locations|length }}';
+        data.finished ? 'Klaar!' : currentStep + '/' + totalSteps;
+    }
+
+    // Switch answer type if location changed
+    if (data.answer_type && data.answer_type !== currentAnswerType) {
+      switchAnswerType(data.answer_type, data.submission_status, data.submission_feedback);
+    } else if (data.answer_type === 'photo') {
+      // Update submission status even if location didn't change
+      const newStatus = data.submission_status;
+      const newFeedback = data.submission_feedback;
+      if (newStatus !== currentSubmissionStatus) {
+        currentSubmissionStatus = newStatus;
+        renderPhotoSection(newStatus, newFeedback);
+        if (newStatus === 'approved') {
+          showToast('✅ Foto goedgekeurd! Ga naar de volgende locatie.', 'success');
+        } else if (newStatus === 'rejected') {
+          showToast('❌ Foto afgekeurd. Zie feedback.', 'error');
+        }
+      }
     }
 
     // Unread badge
@@ -562,10 +769,7 @@ async function loadMessages() {
     container.innerHTML = '';
     container.appendChild(empty);
 
-    data.messages.forEach(msg => {
-      container.appendChild(renderBubble(msg));
-      lastMessageId = Math.max(lastMessageId, msg.id);
-    });
+    data.messages.forEach(msg => container.appendChild(renderBubble(msg)));
     container.scrollTop = container.scrollHeight;
   } catch(e) {}
 }
@@ -573,11 +777,10 @@ async function loadMessages() {
 async function sendMessage() {
   const textarea = document.getElementById('chatTextarea');
   const content = textarea.value.trim();
-  const photo = selectedPhoto;
+  const photo = selectedChatPhoto;
 
   if (!content && !photo) return;
 
-  // Optimistically clear input
   textarea.value = '';
   textarea.style.height = '';
   removePhoto();
@@ -612,7 +815,7 @@ function autoResize(el) {
   el.style.height = Math.min(el.scrollHeight, 100) + 'px';
 }
 
-// Compress image to max 1200px wide, JPEG 80% — reduces 5MB→~300KB
+// Compress image to max 1200px wide, JPEG 80%
 async function compressImage(file) {
   return new Promise((resolve) => {
     const img = new Image();
@@ -632,7 +835,7 @@ async function compressImage(file) {
   });
 }
 
-function previewPhoto(input) {
+function previewChatPhoto(input) {
   const file = input.files[0];
   if (!file) return;
   input.value = '';
@@ -644,17 +847,15 @@ function previewPhoto(input) {
   };
   reader.readAsDataURL(file);
 
-  // Compress and store as blob
-  compressImage(file).then(blob => { selectedPhoto = blob; });
+  compressImage(file).then(blob => { selectedChatPhoto = blob; });
 }
 
 function removePhoto() {
-  selectedPhoto = null;
+  selectedChatPhoto = null;
   document.getElementById('photoPreview').src = '';
   document.getElementById('photoPreviewWrap').style.display = 'none';
 }
 
-// Poll for new messages while chat is open
 setInterval(() => { if (chatOpen) loadMessages(); }, 6000);
 
 // ── Lightbox ───────────────────────────────────────────────────────────────

@@ -65,7 +65,7 @@
             <div class="mb-2 small text-muted">
               <i class="bi bi-arrow-right-circle me-1"></i>
               Route: {% for loc_id in team.route %}
-                {{ locations[loc_id].emoji }} {{ locations[loc_id].name }}{% if not loop.last %} → {% endif %}
+                {{ locations_by_id[loc_id].emoji }} {{ locations_by_id[loc_id].name }}{% if not loop.last %} → {% endif %}
               {% endfor %}
             </div>
 
