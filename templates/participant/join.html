@@ -162,7 +162,7 @@
        data-name="{{ person.full_name }}"
        data-club="{{ person.club }}"
        data-search="{{ (person.full_name ~ ' ' ~ person.club)|lower }}"
-       onclick="{% if not person.checked_in %}selectPerson({{ person.id }}, {{ person.full_name|tojson }}, {{ person.club|tojson }}){% endif %}">
+       onclick="{% if not person.checked_in %}selectPerson(this){% endif %}">
     <div>
       <div class="person-name">{{ person.full_name }}</div>
       <div class="person-club">{{ person.club }}</div>
@@ -213,7 +213,10 @@
 <script>
 let selectedParticipantId = null;
 
-async function selectPerson(id, name, club) {
+async function selectPerson(el) {
+  const id   = el.dataset.id;
+  const name = el.dataset.name;
+  const club = el.dataset.club;
   selectedParticipantId = id;
   document.getElementById('confirmName').textContent = name;
   document.getElementById('confirmClub').textContent = club;
