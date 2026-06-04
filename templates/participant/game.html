@@ -294,6 +294,21 @@
     <div class="challenge-text" id="challengeText">
       {% if team.current_location %}{{ team.current_location.challenge }}{% endif %}
     </div>
+    {% if team.current_location and team.current_location.challenge_image %}
+    <div class="text-center mt-3" id="challengeImageWrap">
+      <img src="{{ url_for('uploaded_file', filename=team.current_location.challenge_image) }}"
+           alt="opdracht afbeelding"
+           id="challengeImage"
+           style="max-width:100%; max-height:280px; border-radius:12px; object-fit:contain; cursor:pointer;"
+           onclick="openLightbox(this.src)">
+    </div>
+    {% else %}
+    <div class="text-center mt-3" id="challengeImageWrap" style="display:none;">
+      <img src="" alt="opdracht afbeelding" id="challengeImage"
+           style="max-width:100%; max-height:280px; border-radius:12px; object-fit:contain; cursor:pointer;"
+           onclick="openLightbox(this.src)">
+    </div>
+    {% endif %}
     <p class="text-muted small mt-2 mb-0">
       💡 <span id="hintText">{% if team.current_location %}{{ team.current_location.arrival_hint or '' }}{% endif %}</span>
     </p>
@@ -659,6 +674,18 @@ async function pollStatus() {
     if (data.clue) document.getElementById('clueText').textContent = data.clue;
     if (data.challenge) document.getElementById('challengeText').textContent = data.challenge;
     if (typeof data.arrival_hint !== 'undefined') document.getElementById('hintText').textContent = data.arrival_hint || '';
+    // Challenge image
+    const imgWrap = document.getElementById('challengeImageWrap');
+    const img = document.getElementById('challengeImage');
+    if (imgWrap && img) {
+      if (data.challenge_image) {
+        img.src = data.challenge_image;
+        imgWrap.style.display = 'block';
+      } else {
+        imgWrap.style.display = 'none';
+        img.src = '';
+      }
+    }
     if (typeof data.progress_pct === 'number') {
       document.getElementById('progressBar').style.width = data.progress_pct + '%';
     }

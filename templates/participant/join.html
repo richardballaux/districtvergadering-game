@@ -162,7 +162,7 @@
        data-name="{{ person.full_name }}"
        data-club="{{ person.club }}"
        data-search="{{ (person.full_name ~ ' ' ~ person.club)|lower }}"
-       onclick="{% if not person.checked_in %}selectPerson({{ person.id }}, '{{ person.full_name|e }}', '{{ person.club|e }}'){% endif %}">
+       onclick="{% if not person.checked_in %}selectPerson({{ person.id }}, {{ person.full_name|tojson }}, {{ person.club|tojson }}){% endif %}">
     <div>
       <div class="person-name">{{ person.full_name }}</div>
       <div class="person-club">{{ person.club }}</div>

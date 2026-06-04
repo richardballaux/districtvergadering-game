@@ -8,8 +8,8 @@
     <p class="text-muted mb-0">Projecteer deze pagina op volledig scherm voor deelnemers.</p>
   </div>
   <div class="ms-auto">
-    <a href="{{ url_for('admin_qr') }}?fullscreen=1" target="_blank" class="btn btn-dark">
-      <i class="bi bi-fullscreen me-2"></i>Volledig scherm
+    <a href="{{ url_for('admin_qr_beamer') }}" target="_blank" class="btn btn-dark">
+      <i class="bi bi-fullscreen me-2"></i>Beamerscherm openen
     </a>
   </div>
 </div>
@@ -23,15 +23,15 @@
 
         <div class="d-flex justify-content-center mb-4">
           <div class="border rounded-3 p-3 bg-white shadow-sm">
-            <img src="{{ url_for('admin_qr_image') }}" alt="QR code" style="width: 220px; height: 220px;">
+            <img src="{{ url_for('admin_qr_image') }}" alt="QR code" style="width:220px;height:220px;">
           </div>
         </div>
 
-        <div class="font-monospace text-muted small mb-3">{{ base_url }}/</div>
+        <div class="font-monospace text-muted small mb-3">{{ public_url }}/</div>
 
-        <div class="alert alert-info py-2 small">
-          <i class="bi bi-wifi me-1"></i>
-          Zorg dat alle deelnemers op hetzelfde wifi-netwerk zitten als deze computer.
+        <div class="alert alert-success py-2 small">
+          <i class="bi bi-globe me-1"></i>
+          Deelnemers kunnen van overal inloggen — geen gemeenschappelijk wifi nodig.
         </div>
       </div>
     </div>
@@ -44,25 +44,28 @@
         <ol class="small mb-0">
           <li class="mb-2">Scan de QR-code met de camera-app van je telefoon.</li>
           <li class="mb-2">Je wordt doorgestuurd naar de spelwebsite.</li>
-          <li class="mb-2">Selecteer je team en vervolgens je naam.</li>
+          <li class="mb-2">Zoek je naam in de lijst en selecteer ze.</li>
           <li class="mb-2">Bevestig je incheck en wacht op het startsein.</li>
         </ol>
         <hr>
         <h6 class="fw-semibold mb-2">Directe URL</h6>
         <div class="input-group">
-          <input type="text" class="form-control font-monospace small" value="{{ base_url }}/" readonly id="urlInput">
+          <input type="text" class="form-control font-monospace small"
+                 value="{{ public_url }}/" readonly id="urlInput">
           <button class="btn btn-outline-secondary" onclick="copyUrl()">
-            <i class="bi bi-clipboard"></i>
+            <i class="bi bi-clipboard" id="clipIcon"></i>
           </button>
         </div>
         <div class="form-text">Kopieer deze link als de QR-code niet werkt.</div>
 
         <hr>
-        <h6 class="fw-semibold mb-2">Netwerk info</h6>
-        <ul class="list-unstyled small text-muted mb-0">
-          <li><i class="bi bi-laptop me-2"></i>IP: <code>{{ ip }}</code></li>
-          <li><i class="bi bi-plug me-2"></i>Poort: <code>{{ port }}</code></li>
-        </ul>
+        <div class="d-grid">
+          <a href="{{ url_for('admin_qr_beamer') }}" target="_blank"
+             class="btn btn-dark btn-lg fw-semibold">
+            <i class="bi bi-display me-2"></i>Beamerscherm openen
+          </a>
+          <div class="form-text text-center mt-1">Opent een aparte pagina klaar voor volledig scherm</div>
+        </div>
       </div>
     </div>
   </div>
@@ -73,17 +76,10 @@
 <script>
 function copyUrl() {
   const input = document.getElementById('urlInput');
-  input.select();
   navigator.clipboard.writeText(input.value);
-  const btn = input.nextElementSibling;
-  btn.innerHTML = '<i class="bi bi-check"></i>';
-  setTimeout(() => btn.innerHTML = '<i class="bi bi-clipboard"></i>', 2000);
-}
-
-// Fullscreen mode
-const params = new URLSearchParams(window.location.search);
-if (params.get('fullscreen') === '1') {
-  document.documentElement.requestFullscreen?.();
+  const icon = document.getElementById('clipIcon');
+  icon.className = 'bi bi-check';
+  setTimeout(() => icon.className = 'bi bi-clipboard', 2000);
 }
 </script>
 {% endblock %}

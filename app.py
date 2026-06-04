@@ -42,6 +42,7 @@ class Location(db.Model):
     arrival_hint = db.Column(db.String(500), nullable=True)
     answer_type = db.Column(db.String(10), nullable=False, default="code")  # 'code' or 'photo'
     secret_code = db.Column(db.String(50), nullable=True)
+    challenge_image = db.Column(db.String(200), nullable=True)  # optional image shown with the challenge
     submissions = db.relationship("PhotoSubmission", backref="location", lazy=True)
 
 
@@ -268,6 +269,16 @@ def pending_submissions_count():
 # Init DB
 # ---------------------------------------------------------------------------
 
+def migrate_columns():
+    """Add any missing columns that were added after initial DB creation."""
+    with db.engine.connect() as conn:
+        # Check and add location.challenge_image
+        cols = [row[1] for row in conn.execute(db.text("PRAGMA table_info(location)"))]
+        if "challenge_image" not in cols:
+            conn.execute(db.text("ALTER TABLE location ADD COLUMN challenge_image VARCHAR(200)"))
+            conn.commit()
+
+
 def migrate_routes():
     """Convert old 0-indexed routes to DB-ID routes if needed."""
     locations = Location.query.order_by(Location.order_index).all()
@@ -288,6 +299,7 @@ def migrate_routes():
 
 with app.app_context():
     db.create_all()
+    migrate_columns()
     get_settings()
     seed_locations()
     migrate_routes()
@@ -463,6 +475,7 @@ def admin_opdrachten():
 @admin_required
 def admin_opdrachten_add():
     max_order = db.session.query(db.func.max(Location.order_index)).scalar() or -1
+    challenge_image = save_photo(request.files.get("challenge_image"))
     loc = Location(
         order_index=max_order + 1,
         name=request.form.get("name", "Nieuwe locatie"),
@@ -472,6 +485,7 @@ def admin_opdrachten_add():
         arrival_hint=request.form.get("arrival_hint", ""),
         answer_type=request.form.get("answer_type", "code"),
         secret_code=request.form.get("secret_code", "").strip().upper() or None,
+        challenge_image=challenge_image,
     )
     db.session.add(loc)
     db.session.commit()
@@ -490,6 +504,12 @@ def admin_opdrachten_edit(loc_id):
     loc.arrival_hint = request.form.get("arrival_hint", loc.arrival_hint)
     loc.answer_type = request.form.get("answer_type", loc.answer_type)
     loc.secret_code = request.form.get("secret_code", "").strip().upper() or None
+    # Challenge image: new upload takes priority; checkbox to delete existing
+    new_image = save_photo(request.files.get("challenge_image"))
+    if new_image:
+        loc.challenge_image = new_image
+    elif request.form.get("delete_challenge_image"):
+        loc.challenge_image = None
     db.session.commit()
     flash(f"✅ '{loc.name}' opgeslagen.", "success")
     return redirect(url_for("admin_opdrachten"))
@@ -630,20 +650,29 @@ def admin_settings():
 # Admin: QR code
 # ---------------------------------------------------------------------------
 
+PUBLIC_URL = os.environ.get(
+    "PUBLIC_URL",
+    "https://districtvergadering-game-cy3q.onrender.com"
+).rstrip("/")
+
+
 @app.route("/admin/qr")
 @admin_required
 def admin_qr():
-    ip = get_local_ip()
-    port = request.environ.get("SERVER_PORT", 5050)
-    return render_template("admin/qr.html", base_url=f"http://{ip}:{port}", ip=ip, port=port)
+    return render_template("admin/qr.html", public_url=PUBLIC_URL)
+
+
+@app.route("/admin/qr/beamer")
+@admin_required
+def admin_qr_beamer():
+    """Standalone fullscreen beamer page — no sidebar."""
+    return render_template("admin/qr_beamer.html", public_url=PUBLIC_URL)
 
 
 @app.route("/admin/qr-image")
 @admin_required
 def admin_qr_image():
-    ip = get_local_ip()
-    port = request.environ.get("SERVER_PORT", 5050)
-    img = qrcode.make(f"http://{ip}:{port}/", box_size=12, border=4)
+    img = qrcode.make(PUBLIC_URL + "/", box_size=12, border=4)
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     buf.seek(0)
@@ -876,6 +905,8 @@ def participant_game_status():
         "challenge": loc.challenge if loc else None,
         "arrival_hint": loc.arrival_hint if loc else None,
         "answer_type": loc.answer_type if loc else "code",
+        "challenge_image": url_for("uploaded_file", filename=loc.challenge_image)
+                           if loc and loc.challenge_image else None,
         "progress_pct": team.progress_pct,
         "submission_status": submission_status,
         "submission_feedback": submission_feedback,

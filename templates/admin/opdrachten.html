@@ -5,7 +5,7 @@
 <div class="d-flex align-items-center mb-4">
   <div>
     <h2 class="fw-bold mb-0">Opdrachten &amp; Locaties</h2>
-    <p class="text-muted mb-0">Beheer de rondes, aanwijzingen en opdrachten van het stadsspel.</p>
+    <p class="text-muted mb-0">Beheer de rondes en opdrachten van het stadsspel.</p>
   </div>
   <button class="btn btn-primary ms-auto" data-bs-toggle="modal" data-bs-target="#addModal">
     <i class="bi bi-plus-circle me-2"></i>Ronde toevoegen
@@ -28,6 +28,7 @@
   {% for loc in locations %}
   <div class="card" id="loc-{{ loc.id }}">
     <div class="card-body p-0">
+
       <!-- Collapsed header -->
       <div class="d-flex align-items-center p-3 gap-3" style="cursor:pointer;"
            onclick="toggleLocCard({{ loc.id }})">
@@ -55,9 +56,14 @@
         <div class="flex-fill min-width-0">
           <div class="fw-bold">{{ loc.name }}</div>
           <div class="text-muted small text-truncate" style="max-width:400px;">
-            {{ loc.challenge[:80] }}{% if loc.challenge|length > 80 %}…{% endif %}
+            {{ loc.challenge[:90] }}{% if loc.challenge|length > 90 %}…{% endif %}
           </div>
         </div>
+
+        <!-- Image indicator -->
+        {% if loc.challenge_image %}
+        <span class="badge bg-light text-dark border flex-shrink-0" title="Heeft afbeelding">🖼️</span>
+        {% endif %}
 
         <!-- Answer type badge -->
         <span class="badge {% if loc.answer_type == 'photo' %}bg-warning text-dark{% else %}bg-info text-dark{% endif %} flex-shrink-0">
@@ -70,24 +76,22 @@
 
       <!-- Expanded edit form -->
       <div id="locBody-{{ loc.id }}" style="display:none; border-top:1px solid #eee;">
-        <form method="POST" action="{{ url_for('admin_opdrachten_edit', loc_id=loc.id) }}" class="p-4">
+        <form method="POST" action="{{ url_for('admin_opdrachten_edit', loc_id=loc.id) }}"
+              enctype="multipart/form-data" class="p-4">
           <div class="row g-3">
+
+            <!-- Emoji + Name -->
             <div class="col-sm-2">
               <label class="form-label fw-semibold">Emoji</label>
-              <input type="text" name="emoji" value="{{ loc.emoji }}" class="form-control text-center fs-4" maxlength="4">
+              <input type="text" name="emoji" value="{{ loc.emoji }}"
+                     class="form-control text-center fs-4" maxlength="4">
             </div>
             <div class="col-sm-10">
               <label class="form-label fw-semibold">Naam van de locatie</label>
               <input type="text" name="name" value="{{ loc.name }}" class="form-control" required>
             </div>
 
-            <div class="col-12">
-              <label class="form-label fw-semibold">
-                Aanwijzing <span class="text-muted fw-normal">(route-hint voor het team om de locatie te vinden)</span>
-              </label>
-              <textarea name="clue" class="form-control" rows="3">{{ loc.clue }}</textarea>
-            </div>
-
+            <!-- Challenge text -->
             <div class="col-12">
               <label class="form-label fw-semibold">
                 Opdracht <span class="text-muted fw-normal">(wat moeten de teams doen ter plaatse?)</span>
@@ -95,9 +99,40 @@
               <textarea name="challenge" class="form-control" rows="4">{{ loc.challenge }}</textarea>
             </div>
 
+            <!-- Challenge image -->
             <div class="col-12">
               <label class="form-label fw-semibold">
-                Aankomstbevestiging <span class="text-muted fw-normal">(optioneel: extra info die getoond wordt bij aankomst)</span>
+                Afbeelding bij opdracht <span class="text-muted fw-normal">(optioneel)</span>
+              </label>
+              {% if loc.challenge_image %}
+              <div class="mb-2 d-flex align-items-start gap-3">
+                <img src="{{ url_for('uploaded_file', filename=loc.challenge_image) }}"
+                     alt="huidige afbeelding"
+                     style="max-height:120px; border-radius:8px; border:1px solid #dee2e6; cursor:pointer;"
+                     onclick="openLightbox(this.src)">
+                <div>
+                  <div class="small text-muted mb-2">Huidige afbeelding</div>
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="delete_challenge_image"
+                           id="delImg-{{ loc.id }}" value="1">
+                    <label class="form-check-label text-danger small" for="delImg-{{ loc.id }}">
+                      Afbeelding verwijderen
+                    </label>
+                  </div>
+                </div>
+              </div>
+              {% endif %}
+              <input type="file" name="challenge_image" class="form-control" accept="image/*">
+              <div class="form-text">
+                {% if loc.challenge_image %}Kies een nieuw bestand om de huidige te vervangen.
+                {% else %}Voeg een foto of afbeelding toe die bij de opdracht getoond wordt.{% endif %}
+              </div>
+            </div>
+
+            <!-- Arrival hint -->
+            <div class="col-12">
+              <label class="form-label fw-semibold">
+                Aankomstbevestiging <span class="text-muted fw-normal">(optioneel)</span>
               </label>
               <input type="text" name="arrival_hint" value="{{ loc.arrival_hint or '' }}" class="form-control"
                      placeholder="bv. 'Jullie staan voor het stadhuis!'">
@@ -106,14 +141,14 @@
             <!-- Answer type toggle -->
             <div class="col-sm-6">
               <label class="form-label fw-semibold">Antwoordtype</label>
-              <div class="d-flex gap-2">
-                <div class="form-check form-check-inline">
+              <div class="d-flex gap-3 flex-wrap">
+                <div class="form-check">
                   <input class="form-check-input" type="radio" name="answer_type" value="code"
                          id="type_code_{{ loc.id }}" {% if loc.answer_type == 'code' %}checked{% endif %}
                          onchange="toggleCodeField({{ loc.id }}, this.value)">
                   <label class="form-check-label" for="type_code_{{ loc.id }}">🔑 Geheime code</label>
                 </div>
-                <div class="form-check form-check-inline">
+                <div class="form-check">
                   <input class="form-check-input" type="radio" name="answer_type" value="photo"
                          id="type_photo_{{ loc.id }}" {% if loc.answer_type == 'photo' %}checked{% endif %}
                          onchange="toggleCodeField({{ loc.id }}, this.value)">
@@ -122,7 +157,7 @@
               </div>
             </div>
 
-            <!-- Secret code field (only for 'code' type) -->
+            <!-- Secret code field -->
             <div class="col-sm-6" id="codeField-{{ loc.id }}"
                  style="{% if loc.answer_type != 'code' %}display:none;{% endif %}">
               <label class="form-label fw-semibold">Geheime code</label>
@@ -130,8 +165,7 @@
                 <input type="text" name="secret_code"
                        value="{{ loc.secret_code or '' }}"
                        class="form-control font-monospace text-uppercase fw-bold"
-                       placeholder="bv. AALST"
-                       maxlength="20"
+                       placeholder="bv. AALST" maxlength="20"
                        oninput="this.value=this.value.toUpperCase()"
                        id="codeInput-{{ loc.id }}">
                 <button type="button" class="btn btn-outline-secondary"
@@ -142,19 +176,20 @@
             </div>
           </div>
 
-          <div class="d-flex gap-2 mt-4 pt-3 border-top">
+          <div class="d-flex gap-2 mt-4 pt-3 border-top align-items-center">
             <button type="submit" class="btn btn-success fw-semibold px-4">
               <i class="bi bi-save me-2"></i>Opslaan
             </button>
             <button type="button" class="btn btn-outline-secondary"
                     onclick="toggleLocCard({{ loc.id }})">Annuleren</button>
-            <form method="POST" action="{{ url_for('admin_opdrachten_delete', loc_id=loc.id) }}"
-                  class="ms-auto"
-                  onsubmit="return confirm('Locatie \'{{ loc.name }}\' verwijderen? Dit kan niet ongedaan worden.')">
-              <button type="submit" class="btn btn-outline-danger">
-                <i class="bi bi-trash me-2"></i>Verwijderen
-              </button>
-            </form>
+            <div class="ms-auto">
+              <form method="POST" action="{{ url_for('admin_opdrachten_delete', loc_id=loc.id) }}"
+                    onsubmit="return confirm('Locatie \'{{ loc.name }}\' verwijderen?')">
+                <button type="submit" class="btn btn-outline-danger">
+                  <i class="bi bi-trash me-2"></i>Verwijderen
+                </button>
+              </form>
+            </div>
           </div>
         </form>
       </div>
@@ -175,13 +210,14 @@
 <div class="modal fade" id="addModal" tabindex="-1">
   <div class="modal-dialog modal-lg">
     <div class="modal-content">
-      <form method="POST" action="{{ url_for('admin_opdrachten_add') }}">
+      <form method="POST" action="{{ url_for('admin_opdrachten_add') }}" enctype="multipart/form-data">
         <div class="modal-header">
           <h5 class="modal-title fw-bold"><i class="bi bi-plus-circle me-2"></i>Nieuwe locatie / ronde</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
           <div class="row g-3">
+
             <div class="col-sm-2">
               <label class="form-label fw-semibold">Emoji</label>
               <input type="text" name="emoji" value="📍" class="form-control text-center fs-4" maxlength="4">
@@ -192,15 +228,17 @@
             </div>
 
             <div class="col-12">
-              <label class="form-label fw-semibold">Aanwijzing</label>
-              <textarea name="clue" class="form-control" rows="3"
-                        placeholder="De hint die teams te zien krijgen om deze locatie te vinden…"></textarea>
-            </div>
-
-            <div class="col-12">
               <label class="form-label fw-semibold">Opdracht</label>
               <textarea name="challenge" class="form-control" rows="4"
                         placeholder="Wat moeten de teams doen zodra ze aankomen?"></textarea>
+            </div>
+
+            <div class="col-12">
+              <label class="form-label fw-semibold">
+                Afbeelding bij opdracht <span class="text-muted fw-normal">(optioneel)</span>
+              </label>
+              <input type="file" name="challenge_image" class="form-control" accept="image/*">
+              <div class="form-text">Foto of afbeelding die bij de opdracht getoond wordt.</div>
             </div>
 
             <div class="col-12">
@@ -211,7 +249,7 @@
 
             <div class="col-sm-6">
               <label class="form-label fw-semibold">Antwoordtype</label>
-              <div class="d-flex gap-3">
+              <div class="d-flex gap-3 flex-wrap">
                 <div class="form-check">
                   <input class="form-check-input" type="radio" name="answer_type" value="code"
                          id="new_type_code" checked onchange="toggleNewCodeField(this.value)">
@@ -238,6 +276,7 @@
                 </button>
               </div>
             </div>
+
           </div>
         </div>
         <div class="modal-footer">
@@ -249,6 +288,17 @@
       </form>
     </div>
   </div>
+</div>
+
+<!-- Lightbox for challenge images -->
+<div id="lightbox" onclick="closeLightbox()"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:1000;
+            align-items:center;justify-content:center;">
+  <img id="lightboxImg" src="" alt=""
+       style="max-width:90vw;max-height:90vh;border-radius:8px;">
+  <button onclick="closeLightbox()"
+          style="position:absolute;top:1rem;right:1rem;background:rgba(255,255,255,.2);
+                 border:none;color:#fff;border-radius:50%;width:36px;height:36px;font-size:1.1rem;">✕</button>
 </div>
 {% endblock %}
 
@@ -277,6 +327,15 @@ function toggleNewCodeField(value) {
 function randomCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   return Array.from({length: 6}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+}
+
+function openLightbox(src) {
+  const lb = document.getElementById('lightbox');
+  document.getElementById('lightboxImg').src = src;
+  lb.style.display = 'flex';
+}
+function closeLightbox() {
+  document.getElementById('lightbox').style.display = 'none';
 }
 </script>
 {% endblock %}

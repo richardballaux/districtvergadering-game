@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stadsspel Aalst – QR</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0f1923;
+      color: #fff;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2rem;
+      padding: 2rem;
+      user-select: none;
+    }
+
+    .lion { font-size: 4rem; animation: breathe 3s ease-in-out infinite; }
+    @keyframes breathe { 0%,100%{transform:scale(1)} 50%{transform:scale(1.06)} }
+
+    h1 {
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      font-weight: 900;
+      letter-spacing: -.02em;
+      text-align: center;
+    }
+    .subtitle {
+      font-size: clamp(1rem, 2.5vw, 1.5rem);
+      color: rgba(255,255,255,.65);
+      text-align: center;
+    }
+
+    .qr-card {
+      background: #fff;
+      border-radius: 24px;
+      padding: 1.5rem;
+      box-shadow: 0 0 80px rgba(255,255,255,.12);
+    }
+    .qr-card img {
+      display: block;
+      width: clamp(220px, 30vw, 380px);
+      height: clamp(220px, 30vw, 380px);
+    }
+
+    .url-label {
+      font-size: clamp(.85rem, 1.8vw, 1.15rem);
+      font-family: 'Courier New', monospace;
+      color: rgba(255,255,255,.55);
+      letter-spacing: .04em;
+    }
+
+    .instruction {
+      font-size: clamp(.9rem, 2vw, 1.2rem);
+      color: rgba(255,255,255,.8);
+      text-align: center;
+      max-width: 520px;
+      line-height: 1.6;
+    }
+
+    /* Fullscreen button — bottom-right corner, fades out after idle */
+    #fsBtn {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      background: rgba(255,255,255,.12);
+      border: 1px solid rgba(255,255,255,.2);
+      border-radius: 12px;
+      color: #fff;
+      font-size: .9rem;
+      padding: .55rem 1.1rem;
+      cursor: pointer;
+      transition: background .2s, opacity .4s;
+      opacity: 1;
+    }
+    #fsBtn:hover { background: rgba(255,255,255,.22); }
+    #fsBtn.hidden { opacity: 0; pointer-events: none; }
+
+    /* Fullscreen: hide the button label when actually fullscreen */
+    :fullscreen #fsBtn { bottom: 1rem; right: 1rem; }
+    :-webkit-full-screen #fsBtn { bottom: 1rem; right: 1rem; }
+  </style>
+</head>
+<body>
+
+<div class="lion">🦁</div>
+<h1>Stadsspel Aalst</h1>
+<p class="subtitle">Scan de QR-code om deel te nemen</p>
+
+<div class="qr-card">
+  <img src="{{ url_for('admin_qr_image') }}" alt="QR code">
+</div>
+
+<p class="url-label">{{ public_url }}/</p>
+
+<p class="instruction">
+  Open je camera-app, scan de code en zoek je naam in de lijst.
+</p>
+
+<button id="fsBtn" onclick="toggleFullscreen()">
+  ⛶ Volledig scherm
+</button>
+
+<script>
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(() => {});
+  } else {
+    document.exitFullscreen().catch(() => {});
+  }
+}
+
+// Update button label based on fullscreen state
+document.addEventListener('fullscreenchange', () => {
+  const btn = document.getElementById('fsBtn');
+  if (document.fullscreenElement) {
+    btn.textContent = '✕ Volledig scherm sluiten';
+  } else {
+    btn.textContent = '⛶ Volledig scherm';
+  }
+});
+
+// Auto-hide button after 4 seconds of no mouse movement
+let hideTimer;
+function resetHideTimer() {
+  const btn = document.getElementById('fsBtn');
+  btn.classList.remove('hidden');
+  clearTimeout(hideTimer);
+  hideTimer = setTimeout(() => btn.classList.add('hidden'), 4000);
+}
+document.addEventListener('mousemove', resetHideTimer);
+document.addEventListener('touchstart', resetHideTimer);
+resetHideTimer();
+
+// Enter fullscreen automatically when page opens (requires user gesture from opener)
+// Works when opened via window.open() or button click
+window.addEventListener('load', () => {
+  // Small delay so the browser registers the page load as triggered by user gesture
+  setTimeout(() => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {
+        // Browser may block auto-fullscreen without gesture; user can click the button
+      });
+    }
+  }, 300);
+});
+</script>
+</body>
+</html>
