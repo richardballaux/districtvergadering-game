@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stemming – Beamerscherm</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0a0a0f;
+      color: #fff;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      height: 100vh; width: 100vw;
+      overflow: hidden;
+      display: flex; flex-direction: column;
+    }
+
+    /* ── Photo area ─────────────────────────────── */
+    #photoArea {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      position: relative; overflow: hidden;
+    }
+    #bgBlur {
+      position: absolute; inset: 0;
+      background-size: cover; background-position: center;
+      filter: blur(30px) brightness(.35) saturate(.5);
+      transition: background-image .6s ease;
+    }
+    #mainPhoto {
+      position: relative; z-index: 2;
+      max-height: 88vh; max-width: 88vw;
+      object-fit: contain; border-radius: 16px;
+      box-shadow: 0 20px 80px rgba(0,0,0,.8);
+      transition: opacity .4s ease;
+    }
+
+    /* ── Bottom bar ─────────────────────────────── */
+    #bottomBar {
+      position: relative; z-index: 10;
+      background: rgba(0,0,0,.75); backdrop-filter: blur(10px);
+      display: flex; align-items: center; gap: 1.5rem;
+      padding: .75rem 2rem;
+      border-top: 1px solid rgba(255,255,255,.08);
+    }
+    #photoMeta { flex: 1; }
+    #photoLabel { font-size: clamp(.8rem, 1.5vw, 1.1rem); opacity: .7; }
+    #photoParticipant { font-size: clamp(1rem, 2vw, 1.4rem); font-weight: 700; }
+    #photoCounter {
+      font-size: clamp(1.2rem, 2.5vw, 1.8rem); font-weight: 900;
+      color: rgba(255,255,255,.5); white-space: nowrap;
+    }
+
+    /* Vote display */
+    #voteDisplay {
+      display: none; align-items: center; gap: .6rem; white-space: nowrap;
+    }
+    #voteDisplay.visible { display: flex; }
+    #voteHeart { font-size: clamp(1.4rem, 3vw, 2rem); }
+    #voteNum {
+      font-size: clamp(2rem, 4.5vw, 3rem); font-weight: 900;
+      line-height: 1; transition: transform .2s;
+    }
+    #voteNum.bump { transform: scale(1.3); }
+    #voteWord { font-size: clamp(.75rem, 1.4vw, .95rem); opacity: .7; line-height: 1.2; }
+
+    /* ── Phase badge ────────────────────────────── */
+    #phaseBadge {
+      position: absolute; top: 1.25rem; left: 1.5rem; z-index: 20;
+      background: rgba(255,255,255,.12); backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,.2);
+      border-radius: 50px; padding: .35rem 1rem;
+      font-size: clamp(.7rem, 1.2vw, .9rem); font-weight: 600;
+    }
+
+    /* ── Waiting screen ─────────────────────────── */
+    #waitScreen {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 1.5rem;
+      text-align: center; padding: 2rem;
+    }
+    #waitScreen .lion { font-size: clamp(4rem, 10vw, 7rem); animation: pulse 2.5s infinite; }
+    @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.07)} }
+    #waitScreen h1 { font-size: clamp(1.5rem, 4vw, 3rem); font-weight: 900; }
+    #waitScreen p { font-size: clamp(.9rem, 2vw, 1.3rem); opacity: .65; }
+
+    /* ── Results screen ─────────────────────────── */
+    #resultsScreen {
+      flex: 1; overflow-y: auto;
+      padding: 2rem;
+      display: none; flex-direction: column; align-items: center; gap: 1.5rem;
+    }
+    #resultsScreen h1 { font-size: clamp(1.8rem, 4vw, 3rem); font-weight: 900; text-align: center; }
+    .result-row {
+      display: flex; align-items: center; gap: 1.25rem;
+      background: rgba(255,255,255,.06); border-radius: 16px; padding: 1rem 1.5rem;
+      width: 100%; max-width: 700px;
+    }
+    .result-row.gold { background: rgba(255,193,7,.15); border: 1px solid rgba(255,193,7,.4); }
+    .result-medal { font-size: clamp(2rem, 4vw, 3rem); flex-shrink: 0; }
+    .result-img {
+      width: clamp(70px,10vw,110px); height: clamp(70px,10vw,110px);
+      object-fit: cover; border-radius: 10px; flex-shrink: 0;
+    }
+    .result-info { flex: 1; }
+    .result-name { font-size: clamp(1rem, 2vw, 1.4rem); font-weight: 700; }
+    .result-label { font-size: clamp(.75rem, 1.3vw, .95rem); opacity: .6; margin-top: .2rem; }
+    .result-votes {
+      font-size: clamp(1.5rem, 3vw, 2.2rem); font-weight: 900; color: #ffc107;
+      white-space: nowrap;
+    }
+
+    /* Fullscreen button */
+    #fsBtn {
+      position: fixed; bottom: 1rem; right: 1rem; z-index: 100;
+      background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2);
+      color: #fff; border-radius: 10px; padding: .4rem .9rem; cursor: pointer;
+      font-size: .85rem; transition: opacity .4s;
+    }
+    #fsBtn.hidden { opacity: 0; pointer-events: none; }
+  </style>
+</head>
+<body>
+
+<!-- Waiting -->
+<div id="waitScreen">
+  <div class="lion">🦁</div>
+  <h1>Stadsspel Aalst</h1>
+  <p>Wachten op de begeleider…</p>
+</div>
+
+<!-- Photo view (preview + voting) -->
+<div id="photoView" style="display:none; flex:1; flex-direction:column;">
+  <div id="phaseBadge">👁️ Voorvertoning</div>
+  <div id="photoArea">
+    <div id="bgBlur"></div>
+    <img id="mainPhoto" src="" alt="">
+  </div>
+  <div id="bottomBar">
+    <div id="photoMeta">
+      <div id="photoLabel"></div>
+      <div id="photoParticipant"></div>
+    </div>
+    <div id="voteDisplay">
+      <div id="voteHeart">❤️</div>
+      <div id="voteNum">0</div>
+      <div id="voteWord">stemmen</div>
+    </div>
+    <div id="photoCounter">1 / 1</div>
+  </div>
+</div>
+
+<!-- Results -->
+<div id="resultsScreen">
+  <h1>🏆 Resultaten</h1>
+  <div id="resultsList"></div>
+</div>
+
+<button id="fsBtn" onclick="toggleFullscreen()">⛶ Volledig scherm</button>
+
+<script>
+let lastStatus = null;
+let lastVoteNum = 0;
+
+async function poll() {
+  try {
+    const res = await fetch('{{ url_for("admin_stemming_status") }}');
+    const data = await res.json();
+    render(data);
+  } catch(e) {}
+}
+
+function render(data) {
+  const wait    = document.getElementById('waitScreen');
+  const view    = document.getElementById('photoView');
+  const results = document.getElementById('resultsScreen');
+  const badge   = document.getElementById('phaseBadge');
+  const voteBox = document.getElementById('voteDisplay');
+
+  if (data.status === 'setup') {
+    wait.style.display = 'flex'; view.style.display = 'none'; results.style.display = 'none';
+    return;
+  }
+
+  if (data.status === 'finished') {
+    wait.style.display = 'none'; view.style.display = 'none';
+    results.style.display = 'flex';
+    renderResults(data.results);
+    return;
+  }
+
+  // preview or voting
+  wait.style.display = 'none'; results.style.display = 'none';
+  view.style.display = 'flex';
+
+  if (data.status === 'preview') {
+    badge.textContent = '👁️ Voorvertoning';
+    voteBox.classList.remove('visible');
+  } else {
+    badge.textContent = '🗳️ Stemronde';
+    voteBox.classList.add('visible');
+  }
+
+  if (data.current) {
+    const cur = data.current;
+    const img = document.getElementById('mainPhoto');
+    if (img.src !== cur.photo_url) {
+      img.style.opacity = '0';
+      setTimeout(() => {
+        img.src = cur.photo_url;
+        document.getElementById('bgBlur').style.backgroundImage = `url('${cur.photo_url}')`;
+        img.style.opacity = '1';
+      }, 350);
+    }
+    document.getElementById('photoLabel').textContent = cur.source_label;
+    document.getElementById('photoParticipant').textContent = cur.participant_name;
+    document.getElementById('photoCounter').textContent =
+      `${data.current_index} / ${data.total}`;
+
+    // Vote count animation
+    const newVotes = cur.vote_count;
+    if (newVotes !== lastVoteNum) {
+      const el = document.getElementById('voteNum');
+      el.textContent = newVotes;
+      el.classList.add('bump');
+      setTimeout(() => el.classList.remove('bump'), 300);
+      lastVoteNum = newVotes;
+    }
+    document.getElementById('voteWord').textContent =
+      newVotes === 1 ? 'stem' : 'stemmen';
+  }
+}
+
+function renderResults(results) {
+  const list = document.getElementById('resultsList');
+  list.innerHTML = '';
+  const medals = ['🥇','🥈','🥉'];
+  results.forEach((r, i) => {
+    const div = document.createElement('div');
+    div.className = 'result-row' + (i === 0 ? ' gold' : '');
+    div.innerHTML = `
+      <div class="result-medal">${medals[i] || (i+1)+'.'}</div>
+      <img class="result-img" src="${r.photo_url}" alt="">
+      <div class="result-info">
+        <div class="result-name">${r.participant_name}</div>
+        <div class="result-label">${r.source_label}</div>
+      </div>
+      <div class="result-votes">${r.vote_count} ❤️</div>`;
+    list.appendChild(div);
+  });
+}
+
+// Fullscreen
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(() => {});
+  } else {
+    document.exitFullscreen().catch(() => {});
+  }
+}
+document.addEventListener('fullscreenchange', () => {
+  document.getElementById('fsBtn').textContent =
+    document.fullscreenElement ? '✕ Verlaat volledig scherm' : '⛶ Volledig scherm';
+});
+
+// Keyboard: arrow keys to send navigate (admin-only convenience)
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+    fetch('/admin/stemming/navigate', {
+      method: 'POST',
+      body: new URLSearchParams({direction: 'next'}),
+    }).then(() => poll());
+  } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+    fetch('/admin/stemming/navigate', {
+      method: 'POST',
+      body: new URLSearchParams({direction: 'prev'}),
+    }).then(() => poll());
+  } else if (e.key === 'f' || e.key === 'F') {
+    toggleFullscreen();
+  }
+});
+
+// Auto-hide fullscreen button
+let hideTimer;
+function resetHide() {
+  document.getElementById('fsBtn').classList.remove('hidden');
+  clearTimeout(hideTimer);
+  hideTimer = setTimeout(() => document.getElementById('fsBtn').classList.add('hidden'), 4000);
+}
+document.addEventListener('mousemove', resetHide);
+resetHide();
+
+// Auto-enter fullscreen on load
+setTimeout(() => {
+  document.documentElement.requestFullscreen().catch(() => {});
+}, 300);
+
+poll();
+setInterval(poll, 2500);
+</script>
+</body>
+</html>

@@ -18,6 +18,6 @@ if __name__ == "__main__":
     print("="*50)
     print(f"  Admin:       http://{ip}:5050/admin")
     print(f"  Deelnemers:  http://{ip}:5050/")
-    print(f"  Wachtwoord:  leos2024")
+    print(f"  Wachtwoord:  RikkertLeos1")
     print("="*50 + "\n")
     app.run(host="0.0.0.0", port=5050, debug=False)

@@ -256,6 +256,24 @@
   </div>
 </div>
 
+<!-- Voting notification banner (hidden until voting starts) -->
+<div id="votingBanner" style="
+  display:none; position:sticky; top:0; z-index:200;
+  background:linear-gradient(135deg,#6f42c1,#0d6efd);
+  color:#fff; text-align:center; padding:.75rem 1rem;
+  font-weight:700; font-size:1rem;
+  box-shadow:0 2px 12px rgba(0,0,0,.25);
+  cursor:pointer; animation:votingPulse 2s ease-in-out infinite;"
+  onclick="window.location.href='/game/stemming'">
+  🗳️ Stemronde is gestart! Tik hier om te stemmen ❤️
+</div>
+<style>
+@keyframes votingPulse {
+  0%,100% { opacity:1; }
+  50% { opacity:.8; }
+}
+</style>
+
 <!-- WAITING STATE -->
 <div id="waitingScreen" class="waiting-screen"
      style="display:{% if not settings.game_started %}flex{% else %}none{% endif %};">
@@ -719,6 +737,32 @@ async function pollStatus() {
       const badge = document.getElementById('chatBadge');
       badge.textContent = data.unread_messages;
       badge.style.display = 'flex';
+    }
+
+    // Voting banner
+    const votingBanner = document.getElementById('votingBanner');
+    if (votingBanner) {
+      if (data.voting_status === 'voting' || data.voting_status === 'preview') {
+        votingBanner.style.display = 'block';
+        votingBanner.textContent = data.voting_status === 'preview'
+          ? '👁️ Fotopresentatie bezig! Kijk mee op het grote scherm.'
+          : '🗳️ Stemronde is gestart! Tik hier om te stemmen ❤️';
+        if (data.voting_status === 'voting') {
+          votingBanner.style.cursor = 'pointer';
+          votingBanner.onclick = () => window.location.href = '/game/stemming';
+        } else {
+          votingBanner.style.cursor = 'default';
+          votingBanner.onclick = null;
+        }
+      } else if (data.voting_status === 'finished') {
+        votingBanner.style.display = 'block';
+        votingBanner.style.background = 'linear-gradient(135deg,#198754,#20c997)';
+        votingBanner.style.cursor = 'pointer';
+        votingBanner.textContent = '🏆 Stemming afgelopen! Tik om de resultaten te bekijken.';
+        votingBanner.onclick = () => window.location.href = '/game/stemming';
+      } else {
+        votingBanner.style.display = 'none';
+      }
     }
   } catch(e) {}
 }

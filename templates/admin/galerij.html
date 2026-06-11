@@ -1,0 +1,229 @@
+{% extends "base_admin.html" %}
+{% block title %}Fotogalerij – Stadsspel Aalst{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-4">
+  <div>
+    <h2 class="fw-bold mb-0">Fotogalerij</h2>
+    <p class="text-muted mb-0">Selecteer foto's voor de stemming. Klik op een foto om toe te voegen of te verwijderen.</p>
+  </div>
+  <div class="ms-auto d-flex gap-2">
+    <span class="badge bg-secondary fs-6 px-3 py-2" id="selectedCount">
+      {{ voting_photos|length }} geselecteerd
+    </span>
+    <a href="{{ url_for('admin_stemming') }}" class="btn btn-primary fw-semibold">
+      <i class="bi bi-hand-thumbs-up me-2"></i>Naar stemming →
+    </a>
+  </div>
+</div>
+
+<div class="row g-4">
+
+  <!-- ── Left: All photos ─────────────────────────────── -->
+  <div class="col-lg-8">
+    <h5 class="fw-semibold mb-3">
+      <i class="bi bi-collection me-2 text-primary"></i>Alle foto's
+      <span class="badge bg-light text-dark ms-2">{{ gallery|length }}</span>
+    </h5>
+
+    {% if not gallery %}
+    <div class="card">
+      <div class="card-body text-center p-5">
+        <div class="fs-1 mb-2">📷</div>
+        <p class="text-muted">Nog geen foto's. Teams sturen foto's via berichten of als antwoord op opdrachten.</p>
+      </div>
+    </div>
+    {% else %}
+    <div class="row g-2" id="galleryGrid">
+      {% for photo in gallery %}
+      {% set selected = photo.filename in in_voting %}
+      <div class="col-6 col-sm-4 col-md-3" id="grid-{{ loop.index }}">
+        <div class="gallery-card {% if selected %}selected{% endif %}"
+             data-filename="{{ photo.filename }}"
+             data-team-id="{{ photo.team_id or '' }}"
+             data-participant="{{ photo.participant_name }}"
+             data-label="{{ photo.source_label }}"
+             onclick="togglePhoto(this)">
+          <img src="{{ url_for('uploaded_file', filename=photo.filename) }}"
+               alt="{{ photo.source_label }}"
+               loading="lazy">
+          <div class="gallery-overlay">
+            <div class="gallery-check" id="check-{{ photo.filename }}">
+              {% if selected %}✓{% else %}+{% endif %}
+            </div>
+          </div>
+          <div class="gallery-meta">
+            <div class="text-truncate" style="font-size:.7rem; line-height:1.2;">{{ photo.source_label }}</div>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- ── Right: Selected for voting ───────────────────── -->
+  <div class="col-lg-4">
+    <h5 class="fw-semibold mb-3">
+      <i class="bi bi-check2-circle me-2 text-success"></i>Geselecteerd voor stemming
+    </h5>
+
+    <div id="votingList">
+      {% if not voting_photos %}
+      <div class="card" id="emptyVoting">
+        <div class="card-body text-center p-4">
+          <div class="fs-2 mb-2">👈</div>
+          <p class="text-muted small">Klik op foto's links om ze toe te voegen.</p>
+        </div>
+      </div>
+      {% endif %}
+
+      {% for vp in voting_photos %}
+      <div class="card mb-2" id="vp-{{ vp.id }}">
+        <div class="card-body p-2 d-flex align-items-center gap-2">
+          <img src="{{ url_for('uploaded_file', filename=vp.photo_filename) }}"
+               alt="" style="width:52px;height:52px;object-fit:cover;border-radius:6px;flex-shrink:0;">
+          <div class="flex-fill min-width-0">
+            <div class="small fw-semibold text-truncate">{{ vp.participant_name }}</div>
+            <div class="text-muted text-truncate" style="font-size:.7rem;">{{ vp.source_label }}</div>
+          </div>
+          <div class="d-flex flex-column gap-1 flex-shrink-0">
+            <form method="POST" action="{{ url_for('admin_galerij_move', vp_id=vp.id) }}" class="m-0">
+              <input type="hidden" name="direction" value="up">
+              <button class="btn btn-sm btn-outline-secondary p-0 px-1" style="font-size:.7rem;"
+                      {% if loop.first %}disabled{% endif %}>▲</button>
+            </form>
+            <form method="POST" action="{{ url_for('admin_galerij_move', vp_id=vp.id) }}" class="m-0">
+              <input type="hidden" name="direction" value="down">
+              <button class="btn btn-sm btn-outline-secondary p-0 px-1" style="font-size:.7rem;"
+                      {% if loop.last %}disabled{% endif %}>▼</button>
+            </form>
+          </div>
+          <button class="btn btn-sm btn-outline-danger flex-shrink-0"
+                  style="font-size:.75rem; padding:.2rem .45rem;"
+                  onclick="removeVotingPhoto('{{ vp.photo_filename }}', this)"
+                  title="Verwijderen uit selectie">✕</button>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    {% if voting_photos %}
+    <div class="d-grid mt-3">
+      <a href="{{ url_for('admin_stemming') }}" class="btn btn-primary fw-semibold">
+        <i class="bi bi-hand-thumbs-up me-2"></i>Naar stemming →
+      </a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<style>
+.gallery-card {
+  position: relative; border-radius: 10px; overflow: hidden;
+  cursor: pointer; aspect-ratio: 1; background: #f0f0f0;
+  border: 3px solid transparent; transition: border-color .15s, transform .1s;
+}
+.gallery-card:hover { transform: scale(1.03); }
+.gallery-card.selected { border-color: #198754; }
+.gallery-card img { width:100%; height:100%; object-fit:cover; display:block; }
+.gallery-overlay {
+  position:absolute; inset:0;
+  background: rgba(0,0,0,.35);
+  display:flex; align-items:flex-start; justify-content:flex-end; padding:.3rem;
+  opacity:0; transition:opacity .15s;
+}
+.gallery-card:hover .gallery-overlay,
+.gallery-card.selected .gallery-overlay { opacity:1; }
+.gallery-check {
+  width:26px; height:26px; border-radius:50%;
+  background:#198754; color:#fff; font-size:.85rem; font-weight:700;
+  display:flex; align-items:center; justify-content:center;
+  transition: background .15s;
+}
+.gallery-card:not(.selected) .gallery-check { background:rgba(255,255,255,.6); color:#333; }
+.gallery-meta {
+  position:absolute; bottom:0; left:0; right:0;
+  background: linear-gradient(transparent, rgba(0,0,0,.7));
+  color:#fff; padding:.4rem .5rem .35rem;
+  font-size:.7rem; line-height:1.2;
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let selectedCount = {{ voting_photos|length }};
+
+async function togglePhoto(card) {
+  const filename  = card.dataset.filename;
+  const teamId    = card.dataset.teamId;
+  const participant = card.dataset.participant;
+  const label     = card.dataset.label;
+  const isSelected = card.classList.contains('selected');
+
+  const fd = new FormData();
+  fd.append('filename', filename);
+  fd.append('team_id', teamId);
+  fd.append('participant_name', participant);
+  fd.append('source_label', label);
+
+  try {
+    const res = await fetch('{{ url_for("admin_galerij_toggle") }}', {method:'POST', body:fd});
+    const data = await res.json();
+
+    const check = card.querySelector('.gallery-check');
+    if (data.action === 'added') {
+      card.classList.add('selected');
+      check.textContent = '✓';
+      selectedCount++;
+      addToList(data.id, filename, participant, label);
+    } else {
+      card.classList.remove('selected');
+      check.textContent = '+';
+      selectedCount--;
+      removeFromList(filename);
+    }
+    document.getElementById('selectedCount').textContent = selectedCount + ' geselecteerd';
+  } catch(e) {
+    alert('Fout bij opslaan. Probeer opnieuw.');
+  }
+}
+
+function addToList(id, filename, participant, label) {
+  document.getElementById('emptyVoting')?.remove();
+  const list = document.getElementById('votingList');
+  const div = document.createElement('div');
+  div.className = 'card mb-2';
+  div.id = 'vp-' + id;
+  div.innerHTML = `
+    <div class="card-body p-2 d-flex align-items-center gap-2">
+      <img src="/uploads/${filename}" alt=""
+           style="width:52px;height:52px;object-fit:cover;border-radius:6px;flex-shrink:0;">
+      <div class="flex-fill min-width-0">
+        <div class="small fw-semibold text-truncate">${participant}</div>
+        <div class="text-muted text-truncate" style="font-size:.7rem;">${label}</div>
+      </div>
+      <button class="btn btn-sm btn-outline-danger flex-shrink-0"
+              style="font-size:.75rem;padding:.2rem .45rem;"
+              onclick="removeVotingPhoto('${filename}', this)" title="Verwijderen">✕</button>
+    </div>`;
+  list.appendChild(div);
+}
+
+function removeFromList(filename) {
+  // find the card in the list that matches this filename
+  document.querySelectorAll('#votingList .card').forEach(card => {
+    if (card.querySelector(`img[src*="${filename}"]`)) card.remove();
+  });
+}
+
+async function removeVotingPhoto(filename, btn) {
+  // Find the gallery card and untoggle it
+  const galleryCard = document.querySelector(`.gallery-card[data-filename="${filename}"]`);
+  if (galleryCard) {
+    await togglePhoto(galleryCard);
+  }
+}
+</script>
+{% endblock %}

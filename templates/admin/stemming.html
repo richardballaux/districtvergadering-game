@@ -1,0 +1,280 @@
+{% extends "base_admin.html" %}
+{% block title %}Stemming – Stadsspel Aalst{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-4">
+  <div>
+    <h2 class="fw-bold mb-0">Stemming</h2>
+    <p class="text-muted mb-0">Stuur de fotostemming aan en bekijk de resultaten.</p>
+  </div>
+  {% if vs.status in ('preview', 'voting') %}
+  <a href="{{ url_for('admin_stemming_beamer') }}" target="_blank"
+     class="btn btn-dark ms-auto fw-semibold">
+    <i class="bi bi-display me-2"></i>Beamerscherm openen
+  </a>
+  {% endif %}
+</div>
+
+{% if not photos %}
+<!-- No photos selected -->
+<div class="card mb-4">
+  <div class="card-body text-center p-5">
+    <div class="fs-1 mb-3">🖼️</div>
+    <h5 class="text-muted">Geen foto's geselecteerd</h5>
+    <p class="text-muted small">Ga naar de galerij om foto's te selecteren voor de stemming.</p>
+    <a href="{{ url_for('admin_galerij') }}" class="btn btn-primary">
+      <i class="bi bi-images me-2"></i>Naar galerij
+    </a>
+  </div>
+</div>
+{% else %}
+
+<!-- ── Status bar ───────────────────────────────────────────── -->
+<div class="card mb-4">
+  <div class="card-body p-4">
+    <div class="row align-items-center g-3">
+      <div class="col-md-5">
+        <div class="d-flex align-items-center gap-3">
+          <div class="fs-2">
+            {% if vs.status == 'setup' %}⚙️
+            {% elif vs.status == 'preview' %}👁️
+            {% elif vs.status == 'voting' %}🗳️
+            {% else %}🏆{% endif %}
+          </div>
+          <div>
+            <div class="fw-bold fs-5">
+              {% if vs.status == 'setup' %}Klaar om te starten
+              {% elif vs.status == 'preview' %}Voorvertoning actief
+              {% elif vs.status == 'voting' %}Stemronde actief
+              {% else %}Stemming afgesloten{% endif %}
+            </div>
+            <div class="text-muted small">
+              {{ photos|length }} foto{% if photos|length != 1 %}s{% endif %} geselecteerd ·
+              {{ MAX_VOTES }} stemmen per deelnemer
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-md-7 d-flex gap-2 justify-content-md-end flex-wrap">
+        {% if vs.status == 'setup' %}
+        <form method="POST" action="{{ url_for('admin_stemming_start_preview') }}">
+          <button type="submit" class="btn btn-outline-primary fw-semibold">
+            <i class="bi bi-eye me-2"></i>Voorvertoning starten
+          </button>
+        </form>
+        <form method="POST" action="{{ url_for('admin_stemming_start_voting') }}">
+          <button type="submit" class="btn btn-primary fw-semibold">
+            <i class="bi bi-hand-thumbs-up me-2"></i>Direct stemmen starten
+          </button>
+        </form>
+
+        {% elif vs.status == 'preview' %}
+        <form method="POST" action="{{ url_for('admin_stemming_navigate') }}">
+          <input type="hidden" name="direction" value="prev">
+          <button type="submit" class="btn btn-outline-secondary">← Vorige</button>
+        </form>
+        <form method="POST" action="{{ url_for('admin_stemming_navigate') }}">
+          <input type="hidden" name="direction" value="next">
+          <button type="submit" class="btn btn-outline-secondary">Volgende →</button>
+        </form>
+        <form method="POST" action="{{ url_for('admin_stemming_start_voting') }}">
+          <button type="submit" class="btn btn-primary fw-semibold">
+            <i class="bi bi-hand-thumbs-up me-2"></i>Stemronde starten →
+          </button>
+        </form>
+
+        {% elif vs.status == 'voting' %}
+        <form method="POST" action="{{ url_for('admin_stemming_navigate') }}">
+          <input type="hidden" name="direction" value="prev">
+          <button type="submit" class="btn btn-outline-secondary">← Vorige</button>
+        </form>
+        <form method="POST" action="{{ url_for('admin_stemming_navigate') }}">
+          <input type="hidden" name="direction" value="next">
+          <button type="submit" class="btn btn-outline-secondary">Volgende →</button>
+        </form>
+        <form method="POST" action="{{ url_for('admin_stemming_finish') }}">
+          <button type="submit" class="btn btn-success fw-semibold"
+                  onclick="return confirm('Stemming afsluiten? Niemand kan daarna nog stemmen.')">
+            <i class="bi bi-flag-fill me-2"></i>Afronden
+          </button>
+        </form>
+
+        {% else %}
+        <a href="{{ url_for('admin_stemming_beamer') }}" target="_blank"
+           class="btn btn-dark fw-semibold">
+          <i class="bi bi-display me-2"></i>Resultaten op beamer
+        </a>
+        {% endif %}
+
+        <form method="POST" action="{{ url_for('admin_stemming_reset') }}"
+              onsubmit="return confirm('Alle stemmen wissen en opnieuw beginnen?')">
+          <button type="submit" class="btn btn-outline-danger">
+            <i class="bi bi-arrow-counterclockwise"></i>
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if vs.status in ('preview', 'voting') and cur %}
+<!-- ── Current photo ────────────────────────────────────────── -->
+<div class="row g-4 mb-4">
+  <div class="col-md-5">
+    <div class="card">
+      <div class="card-body p-0 text-center">
+        <img src="{{ url_for('uploaded_file', filename=cur.photo_filename) }}"
+             alt=""
+             style="width:100%; max-height:320px; object-fit:contain; border-radius:12px;">
+      </div>
+      <div class="card-footer text-center small text-muted py-2">
+        <strong>{{ cur.participant_name }}</strong> · {{ cur.source_label }}
+        {% set cur_idx = namespace(val=0) %}
+        {% for vp in photos %}{% if vp.id == cur.id %}{% set cur_idx.val = loop.index0 %}{% endif %}{% endfor %}
+        <br><span class="badge bg-secondary mt-1">Foto {{ cur_idx.val + 1 }} / {{ photos|length }}</span>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-7">
+    <div class="card h-100">
+      <div class="card-body p-4">
+        {% if vs.status == 'voting' %}
+        <h6 class="fw-semibold mb-3">🗳️ Live stemmen voor huidige foto</h6>
+        <div class="d-flex align-items-center gap-3 mb-3">
+          <div style="font-size:3rem; font-weight:900; color:#0d6efd;" id="curVoteCount">
+            {{ cur.vote_count }}
+          </div>
+          <div class="text-muted small">
+            stem{% if cur.vote_count != 1 %}men{% endif %} ontvangen<br>
+            <span id="totalVoters"></span>
+          </div>
+        </div>
+        <div class="progress mb-3" style="height:12px;">
+          <div class="progress-bar bg-primary" id="voteBar" style="width:0%; transition:width .5s;"></div>
+        </div>
+        {% else %}
+        <h6 class="fw-semibold mb-3">👁️ Voorvertoning</h6>
+        <p class="text-muted small">Stemmen zijn nog niet open. Klik "Stemronde starten" om stemmen toe te laten.</p>
+        {% endif %}
+
+        <hr>
+        <h6 class="fw-semibold mb-2">Alle geselecteerde foto's</h6>
+        <div class="d-flex flex-wrap gap-1">
+          {% for vp in photos %}
+          <div class="position-relative" title="{{ vp.source_label }}">
+            <img src="{{ url_for('uploaded_file', filename=vp.photo_filename) }}"
+                 style="width:44px;height:44px;object-fit:cover;border-radius:6px;
+                        border:2px solid {% if vp.id == cur.id %}#0d6efd{% else %}#dee2e6{% endif %};">
+            {% if vs.status == 'voting' and vp.vote_count > 0 %}
+            <span style="position:absolute;top:-6px;right:-6px;background:#0d6efd;color:#fff;
+                         border-radius:50%;width:18px;height:18px;font-size:.65rem;font-weight:700;
+                         display:flex;align-items:center;justify-content:center;">
+              {{ vp.vote_count }}
+            </span>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if vs.status == 'finished' %}
+<!-- ── Results ──────────────────────────────────────────────── -->
+<h5 class="fw-semibold mb-3">🏆 Eindresultaten</h5>
+{% set sorted_photos = photos|sort(attribute='vote_count', reverse=True) %}
+<div class="row g-3">
+  {% for vp in sorted_photos %}
+  <div class="col-sm-6 col-xl-4">
+    <div class="card {% if loop.index == 1 %}border-warning{% endif %}"
+         style="{% if loop.index == 1 %}box-shadow:0 0 20px rgba(255,193,7,.4);{% endif %}">
+      <div class="card-body p-3">
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <span class="fw-bold fs-4">
+            {% if loop.index == 1 %}🥇
+            {% elif loop.index == 2 %}🥈
+            {% elif loop.index == 3 %}🥉
+            {% else %}{{ loop.index }}.{% endif %}
+          </span>
+          <img src="{{ url_for('uploaded_file', filename=vp.photo_filename) }}"
+               style="width:60px;height:60px;object-fit:cover;border-radius:8px;cursor:pointer;"
+               onclick="openLightbox('{{ url_for('uploaded_file', filename=vp.photo_filename) }}')">
+          <div class="flex-fill min-width-0">
+            <div class="fw-semibold small text-truncate">{{ vp.participant_name }}</div>
+            <div class="text-muted text-truncate" style="font-size:.72rem;">{{ vp.source_label }}</div>
+            <div class="fw-bold text-primary">{{ vp.vote_count }} stem{% if vp.vote_count != 1 %}men{% endif %}</div>
+          </div>
+        </div>
+        <img src="{{ url_for('uploaded_file', filename=vp.photo_filename) }}"
+             alt="" style="width:100%;max-height:140px;object-fit:cover;border-radius:8px;cursor:pointer;"
+             onclick="openLightbox(this.src)">
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Photo strip (setup mode) -->
+{% if vs.status == 'setup' %}
+<h5 class="fw-semibold mb-3">📋 Geselecteerde foto's ({{ photos|length }})</h5>
+<div class="row g-2">
+  {% for vp in photos %}
+  <div class="col-4 col-sm-3 col-md-2">
+    <img src="{{ url_for('uploaded_file', filename=vp.photo_filename) }}"
+         alt="{{ vp.source_label }}"
+         style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;"
+         title="{{ vp.source_label }}">
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% endif %}{# /if not photos #}
+
+<!-- Lightbox -->
+<div id="lightbox" onclick="closeLightbox()"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:1000;
+            align-items:center;justify-content:center;">
+  <img id="lightboxImg" src="" alt=""
+       style="max-width:92vw;max-height:92vh;border-radius:10px;">
+  <button onclick="closeLightbox()"
+          style="position:absolute;top:1rem;right:1rem;background:rgba(255,255,255,.15);
+                 border:none;color:#fff;border-radius:50%;width:38px;height:38px;font-size:1.2rem;">✕</button>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function openLightbox(src) {
+  document.getElementById('lightboxImg').src = src;
+  document.getElementById('lightbox').style.display = 'flex';
+}
+function closeLightbox() {
+  document.getElementById('lightbox').style.display = 'none';
+}
+
+{% if vs.status == 'voting' and cur %}
+// Poll live vote count for current photo
+const TOTAL_PHOTOS = {{ photos|length }};
+async function pollVotes() {
+  try {
+    const res = await fetch('{{ url_for("admin_stemming_status") }}');
+    const data = await res.json();
+    const votes = data.current?.vote_count ?? 0;
+    const totalVoters = data.total_voters ?? 1;
+    document.getElementById('curVoteCount').textContent = votes;
+    document.getElementById('totalVoters').textContent =
+      `van ${totalVoters} ingelogde deelnemers`;
+    const pct = Math.min(100, Math.round(votes / Math.max(totalVoters, 1) * 100));
+    document.getElementById('voteBar').style.width = pct + '%';
+  } catch(e) {}
+}
+pollVotes();
+setInterval(pollVotes, 4000);
+{% endif %}
+</script>
+{% endblock %}

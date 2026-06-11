@@ -54,6 +54,12 @@
         <a class="nav-link {% if request.endpoint == 'admin_game' %}active{% endif %}" href="{{ url_for('admin_game') }}">
           <i class="bi bi-play-circle me-2"></i>Spel beheren
         </a>
+        <a class="nav-link {% if request.endpoint == 'admin_galerij' or request.endpoint == 'admin_galerij_toggle' or request.endpoint == 'admin_galerij_move' %}active{% endif %}" href="{{ url_for('admin_galerij') }}">
+          <i class="bi bi-images me-2"></i>Galerij
+        </a>
+        <a class="nav-link {% if request.endpoint and 'stemming' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_stemming') }}">
+          <i class="bi bi-hand-thumbs-up me-2"></i>Stemming
+        </a>
         <a class="nav-link {% if request.endpoint == 'admin_messages' %}active{% endif %} position-relative" href="{{ url_for('admin_messages') }}">
           <i class="bi bi-chat-dots me-2"></i>Berichten
           <span id="sidebarUnreadBadge" class="badge bg-danger position-absolute top-50 end-0 translate-middle-y me-2"

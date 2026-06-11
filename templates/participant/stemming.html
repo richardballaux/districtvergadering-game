@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Stemming – {{ team.name if team else 'Stadsspel' }}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      background: #0f1923;
+      min-height: 100vh;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      color: #fff;
+      padding-bottom: 5rem;
+    }
+
+    .top-bar {
+      background: {{ team.color if team else '#1a1a2e' }};
+      padding: 1rem 1.25rem;
+      position: sticky; top: 0; z-index: 50;
+      box-shadow: 0 2px 12px rgba(0,0,0,.3);
+    }
+    .top-bar .team-name { font-weight: 800; font-size: 1.05rem; }
+    .top-bar .member-name { font-size: .8rem; opacity: .8; }
+
+    /* Votes remaining pill */
+    .votes-pill {
+      display: flex; align-items: center; gap: .5rem;
+      background: rgba(255,255,255,.12);
+      border: 1px solid rgba(255,255,255,.2);
+      border-radius: 50px; padding: .35rem 1rem;
+      font-size: .9rem; font-weight: 700;
+    }
+    .votes-pill .dot {
+      width: 10px; height: 10px; border-radius: 50%;
+    }
+    .votes-pill .dot.used { background: rgba(255,255,255,.25); }
+    .votes-pill .dot.free { background: #fff; }
+
+    /* State screens */
+    .center-screen {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      min-height: 75vh; text-align: center; padding: 2rem;
+      gap: 1rem;
+    }
+    .pulse { animation: pulse 2.4s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.07)} }
+
+    /* Photo card */
+    .photo-card {
+      background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 20px;
+      margin: 1rem;
+      overflow: hidden;
+      transition: border-color .2s;
+    }
+    .photo-card.voteable { border-color: rgba(255,255,255,.25); }
+
+    .photo-img {
+      width: 100%; max-height: 52vh;
+      object-fit: contain;
+      display: block;
+      background: #000;
+    }
+
+    .photo-meta {
+      padding: .85rem 1.1rem .5rem;
+    }
+    .photo-counter { font-size: .7rem; opacity: .5; margin-bottom: .2rem; }
+    .photo-participant { font-weight: 700; font-size: 1.05rem; }
+    .photo-label { font-size: .8rem; opacity: .65; margin-top: .1rem; }
+
+    /* Vote button */
+    .btn-vote {
+      width: calc(100% - 2.2rem); margin: .75rem 1.1rem 1rem;
+      border: none; border-radius: 16px;
+      padding: .9rem; font-size: 1.05rem; font-weight: 700;
+      color: #fff; cursor: pointer;
+      background: {{ team.color if team else '#0d6efd' }};
+      transition: opacity .2s, transform .15s;
+    }
+    .btn-vote:hover:not(:disabled) { opacity: .88; transform: translateY(-1px); }
+    .btn-vote:disabled { opacity: .35; cursor: default; }
+    .btn-voted {
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.15);
+      color: rgba(255,255,255,.5);
+    }
+    .btn-own-team {
+      background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.1);
+      color: rgba(255,255,255,.35);
+      font-size: .9rem;
+    }
+
+    /* Bottom bar */
+    .bottom-bar {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: rgba(15,25,35,.95); backdrop-filter: blur(10px);
+      border-top: 1px solid rgba(255,255,255,.08);
+      padding: .75rem 1.25rem;
+      display: flex; align-items: center; justify-content: space-between;
+      z-index: 50;
+    }
+
+    /* Results */
+    .result-card {
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 16px;
+      margin: .6rem 1rem;
+      display: flex; align-items: center; gap: .9rem;
+      padding: .8rem 1rem;
+    }
+    .result-card.gold {
+      background: rgba(255,193,7,.12);
+      border-color: rgba(255,193,7,.35);
+    }
+    .result-medal { font-size: 1.8rem; flex-shrink: 0; }
+    .result-img {
+      width: 60px; height: 60px; border-radius: 8px;
+      object-fit: cover; flex-shrink: 0;
+    }
+    .result-name { font-weight: 700; font-size: .95rem; }
+    .result-label { font-size: .75rem; opacity: .6; }
+    .result-votes { font-size: 1.3rem; font-weight: 900; color: #ffc107; margin-left: auto; white-space: nowrap; }
+
+    /* Toast */
+    .toast-msg {
+      position: fixed; bottom: 5rem; left: 50%; transform: translateX(-50%);
+      background: #222; color: #fff; padding: .7rem 1.4rem;
+      border-radius: 12px; font-size: .9rem; z-index: 900;
+      max-width: 88vw; text-align: center; display: none;
+    }
+    .toast-msg.success { background: #27ae60; }
+    .toast-msg.error   { background: #e74c3c; }
+  </style>
+</head>
+<body>
+
+<!-- Top bar -->
+<div class="top-bar">
+  <div class="d-flex align-items-center justify-content-between">
+    <div>
+      <div class="team-name">{{ team.name if team else 'Stadsspel' }} · Stemming 🗳️</div>
+      <div class="member-name">{{ participant.full_name }}</div>
+    </div>
+    <div class="votes-pill" id="votesPill">
+      {% for i in range(MAX_VOTES) %}
+      <div class="dot {% if i < votes_used %}used{% else %}free{% endif %}"
+           id="dot-{{ i }}"></div>
+      {% endfor %}
+      <span id="votesLeftLabel">{{ votes_left }} over</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── SETUP: waiting ───────────────────────────────────── -->
+<div id="screenSetup" class="center-screen"
+     style="display:{% if vs.status == 'setup' %}flex{% else %}none{% endif %};">
+  <div class="pulse" style="font-size:3.5rem;">⏳</div>
+  <h4 class="fw-bold mb-0">Stemming komt eraan</h4>
+  <p style="opacity:.6;">De begeleider start de fotostemming straks.<br>Zorg dat je klaar bent!</p>
+</div>
+
+<!-- ── PREVIEW: watch photos ───────────────────────────── -->
+<div id="screenPreview"
+     style="display:{% if vs.status == 'preview' %}block{% else %}none{% endif %};">
+  <div class="center-screen" style="min-height:60vh;">
+    <div style="font-size:3rem;">👁️</div>
+    <h4 class="fw-bold mb-0">Bekijk alle foto's</h4>
+    <p style="opacity:.6;">Kijk mee op het grote scherm.<br>De stemronde start zo dadelijk!</p>
+    <div id="previewPhoto" style="display:none; width:100%; margin-top:1rem;">
+      <img id="previewImg" src="" alt=""
+           style="width:100%; max-height:42vh; object-fit:contain; border-radius:12px;">
+      <p id="previewLabel" style="text-align:center; font-size:.8rem; opacity:.6; margin-top:.5rem;"></p>
+    </div>
+  </div>
+</div>
+
+<!-- ── VOTING: vote per photo ──────────────────────────── -->
+<div id="screenVoting"
+     style="display:{% if vs.status == 'voting' %}block{% else %}none{% endif %};">
+
+  <!-- Waiting for first photo -->
+  <div id="votingWait" class="center-screen" style="min-height:70vh;">
+    <div class="pulse" style="font-size:3rem;">🗳️</div>
+    <h4 class="fw-bold">Stemronde actief!</h4>
+    <p style="opacity:.6;">Wacht tot de begeleider een foto toont.<br>Dan kan je stemmen.</p>
+  </div>
+
+  <!-- Current photo to vote on -->
+  <div id="votingPhoto" style="display:none;">
+    <div class="photo-card voteable">
+      <img id="voteImg" class="photo-img" src="" alt="">
+      <div class="photo-meta">
+        <div class="photo-counter" id="voteCounter"></div>
+        <div class="photo-participant" id="voteParticipant"></div>
+        <div class="photo-label" id="voteLabel"></div>
+      </div>
+    </div>
+
+    <!-- Vote button states -->
+    <button class="btn-vote" id="btnVote" onclick="castVote()">
+      ❤️ Stem uitbrengen
+    </button>
+    <button class="btn-vote btn-voted" id="btnVoted" style="display:none;" disabled>
+      ✓ Al gestemd
+    </button>
+    <button class="btn-vote btn-own-team" id="btnOwnTeam" style="display:none;" disabled>
+      🚫 Eigen team — niet mogelijk
+    </button>
+    <button class="btn-vote" id="btnNoVotes" style="display:none;" disabled>
+      Geen stemmen meer over
+    </button>
+  </div>
+</div>
+
+<!-- ── FINISHED: results ───────────────────────────────── -->
+<div id="screenFinished"
+     style="display:{% if vs.status == 'finished' %}block{% else %}none{% endif %};">
+  <div style="text-align:center; padding:2rem 1rem 1rem;">
+    <div style="font-size:3rem; margin-bottom:.5rem;">🏆</div>
+    <h3 class="fw-bold mb-0">Resultaten</h3>
+    <p style="opacity:.6; font-size:.9rem;">Dit zijn de eindresultaten van de stemming.</p>
+  </div>
+  <div id="resultsList"></div>
+</div>
+
+<!-- Toast -->
+<div class="toast-msg" id="toastMsg"></div>
+
+<!-- Bottom bar -->
+<div class="bottom-bar">
+  <small style="opacity:.5;">{{ participant.full_name }}</small>
+  <a href="{{ url_for('participant_game') }}"
+     style="color:rgba(255,255,255,.5); font-size:.85rem; text-decoration:none;">
+    ← Terug naar spel
+  </a>
+</div>
+
+<script>
+const MY_TEAM_ID = {{ (team.id)|tojson if team else 'null' }};
+const MAX_VOTES  = {{ MAX_VOTES }};
+let votesUsed    = {{ votes_used }};
+let currentPhotoId = null;
+let pollInterval;
+
+// ── Toast ──────────────────────────────────────────────
+function showToast(msg, type='') {
+  const t = document.getElementById('toastMsg');
+  t.textContent = msg;
+  t.className = 'toast-msg ' + type;
+  t.style.display = 'block';
+  setTimeout(() => t.style.display = 'none', 3500);
+}
+
+// ── Update votes-pill ──────────────────────────────────
+function updateVotesPill(used) {
+  votesUsed = used;
+  for (let i = 0; i < MAX_VOTES; i++) {
+    const dot = document.getElementById('dot-' + i);
+    if (dot) dot.className = 'dot ' + (i < used ? 'used' : 'free');
+  }
+  const left = MAX_VOTES - used;
+  document.getElementById('votesLeftLabel').textContent =
+    left + (left === 1 ? ' over' : ' over');
+}
+
+// ── Show correct screen ────────────────────────────────
+function showScreen(status) {
+  ['Setup','Preview','Voting','Finished'].forEach(s =>
+    document.getElementById('screen' + s).style.display = 'none');
+  const el = document.getElementById('screen' + status.charAt(0).toUpperCase() + status.slice(1));
+  if (el) el.style.display = 'block';
+}
+
+// ── Poll status ────────────────────────────────────────
+async function poll() {
+  try {
+    const res = await fetch('/game/stemming/status');
+    const data = await res.json();
+    if (data.error) return;
+
+    showScreen(data.status);
+    updateVotesPill(data.votes_used);
+
+    if (data.status === 'preview') {
+      renderPreview(data.current);
+    } else if (data.status === 'voting') {
+      renderVoting(data.current, data.votes_left);
+    } else if (data.status === 'finished') {
+      renderResults(data.results);
+      clearInterval(pollInterval);
+    }
+  } catch(e) {}
+}
+
+// ── Preview ────────────────────────────────────────────
+function renderPreview(cur) {
+  const wrap = document.getElementById('previewPhoto');
+  if (!cur) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  document.getElementById('previewImg').src = cur.photo_url;
+  document.getElementById('previewLabel').textContent =
+    cur.participant_name + ' · ' + cur.source_label;
+}
+
+// ── Voting ─────────────────────────────────────────────
+function renderVoting(cur, votesLeft) {
+  const wait  = document.getElementById('votingWait');
+  const photo = document.getElementById('votingPhoto');
+
+  if (!cur) {
+    wait.style.display = 'flex'; photo.style.display = 'none'; return;
+  }
+  wait.style.display = 'none'; photo.style.display = 'block';
+
+  // Update photo if changed
+  if (cur.id !== currentPhotoId) {
+    currentPhotoId = cur.id;
+    document.getElementById('voteImg').src = cur.photo_url;
+    document.getElementById('voteParticipant').textContent = cur.participant_name;
+    document.getElementById('voteLabel').textContent = cur.source_label;
+    document.getElementById('voteCounter').textContent = ''; // set by status
+  }
+
+  // Button states
+  const btnVote    = document.getElementById('btnVote');
+  const btnVoted   = document.getElementById('btnVoted');
+  const btnOwn     = document.getElementById('btnOwnTeam');
+  const btnNoVotes = document.getElementById('btnNoVotes');
+
+  [btnVote, btnVoted, btnOwn, btnNoVotes].forEach(b => b.style.display = 'none');
+
+  if (cur.is_own_team) {
+    btnOwn.style.display = 'block';
+  } else if (cur.already_voted) {
+    btnVoted.style.display = 'block';
+  } else if (votesLeft <= 0) {
+    btnNoVotes.style.display = 'block';
+  } else {
+    btnVote.style.display = 'block';
+    btnVote.disabled = false;
+  }
+}
+
+// ── Cast vote ──────────────────────────────────────────
+async function castVote() {
+  const btn = document.getElementById('btnVote');
+  btn.disabled = true;
+  btn.textContent = 'Stemmen…';
+
+  try {
+    const res = await fetch('/game/stemming/vote', {method: 'POST'});
+    const data = await res.json();
+    if (data.success) {
+      showToast(data.message, 'success');
+      updateVotesPill(MAX_VOTES - data.votes_left);
+      // Immediately re-poll to update UI
+      await poll();
+    } else {
+      showToast(data.message || 'Kon niet stemmen.', 'error');
+      btn.disabled = false;
+      btn.textContent = '❤️ Stem uitbrengen';
+    }
+  } catch(e) {
+    showToast('Verbindingsfout. Probeer opnieuw.', 'error');
+    btn.disabled = false;
+    btn.textContent = '❤️ Stem uitbrengen';
+  }
+}
+
+// ── Results ────────────────────────────────────────────
+function renderResults(results) {
+  if (!results || !results.length) return;
+  const list = document.getElementById('resultsList');
+  if (list.children.length) return; // already rendered
+  const medals = ['🥇','🥈','🥉'];
+  results.forEach((r, i) => {
+    const div = document.createElement('div');
+    div.className = 'result-card' + (i === 0 ? ' gold' : '');
+    div.innerHTML = `
+      <div class="result-medal">${medals[i] || (i+1)+'.'}</div>
+      <img class="result-img" src="${r.photo_url}" alt="">
+      <div>
+        <div class="result-name">${r.participant_name}</div>
+        <div class="result-label">${r.source_label}</div>
+      </div>
+      <div class="result-votes">${r.vote_count} ❤️</div>`;
+    list.appendChild(div);
+  });
+}
+
+// ── Init ───────────────────────────────────────────────
+{% if vs.status == 'finished' %}
+// Render results on load
+(async () => {
+  const res = await fetch('/game/stemming/status');
+  const data = await res.json();
+  renderResults(data.results);
+  updateVotesPill(data.votes_used);
+})();
+{% endif %}
+
+pollInterval = setInterval(poll, 3000);
+poll();
+</script>
+</body>
+</html>

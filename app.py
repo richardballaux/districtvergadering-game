@@ -74,7 +74,7 @@ class Participant(db.Model):
 
     @property
     def full_name(self):
-        return f"{self.first_name} {self.last_name}"
+        return f"{self.first_name} {self.last_name}".strip()
 
 
 class Team(db.Model):
@@ -128,6 +128,46 @@ class Team(db.Model):
                 .first())
 
 
+class VotingPhoto(db.Model):
+    """A photo selected by the admin for the voting slideshow."""
+    id = db.Column(db.Integer, primary_key=True)
+    photo_filename = db.Column(db.String(200), nullable=False)
+    team_id = db.Column(db.Integer, db.ForeignKey("team.id"), nullable=True)
+    participant_name = db.Column(db.String(100), nullable=True)
+    source_label = db.Column(db.String(200), nullable=True)
+    order_index = db.Column(db.Integer, default=0)
+    added_at = db.Column(db.DateTime, default=datetime.utcnow)
+    votes = db.relationship("Vote", backref="photo", lazy=True,
+                            cascade="all, delete-orphan")
+
+    @property
+    def vote_count(self):
+        return len(self.votes)
+
+
+class VotingSession(db.Model):
+    """Singleton that tracks the voting slideshow state."""
+    id = db.Column(db.Integer, primary_key=True)
+    # setup | preview | voting | finished
+    status = db.Column(db.String(20), default="setup")
+    current_photo_id = db.Column(db.Integer, nullable=True)
+    started_at = db.Column(db.DateTime, nullable=True)
+    finished_at = db.Column(db.DateTime, nullable=True)
+
+
+class Vote(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    participant_id = db.Column(db.Integer, db.ForeignKey("participant.id"),
+                               nullable=False)
+    voting_photo_id = db.Column(db.Integer, db.ForeignKey("voting_photo.id"),
+                                nullable=False)
+    voted_at = db.Column(db.DateTime, default=datetime.utcnow)
+    __table_args__ = (
+        db.UniqueConstraint("participant_id", "voting_photo_id",
+                            name="uq_participant_vote"),
+    )
+
+
 class LocationProgress(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     team_id = db.Column(db.Integer, db.ForeignKey("team.id"), nullable=False)
@@ -140,7 +180,8 @@ class GameSettings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     game_started = db.Column(db.Boolean, default=False)
     game_started_at = db.Column(db.DateTime, nullable=True)
-    admin_password = db.Column(db.String(100), default="leos2024")
+    admin_password = db.Column(db.String(100), default="RikkertLeos1")
+    num_stops = db.Column(db.Integer, default=3)
 
 
 class Message(db.Model):
@@ -177,6 +218,96 @@ def get_settings():
         db.session.add(s)
         db.session.commit()
     return s
+
+
+MAX_VOTES = 3  # votes each participant gets
+
+
+def get_voting_session():
+    s = VotingSession.query.first()
+    if not s:
+        s = VotingSession(status="setup")
+        db.session.add(s)
+        db.session.commit()
+    return s
+
+
+def get_ordered_voting_photos():
+    return VotingPhoto.query.order_by(VotingPhoto.order_index).all()
+
+
+def get_all_gallery_photos():
+    """Collect all team-sent photos (messages + submissions) for the gallery."""
+    result = []
+    # Team message photos
+    for msg in (Message.query
+                .filter_by(sender_type="team")
+                .filter(Message.photo_filename.isnot(None))
+                .order_by(Message.sent_at).all()):
+        team = Team.query.get(msg.team_id)
+        result.append({
+            "filename": msg.photo_filename,
+            "team_id": msg.team_id,
+            "team_name": team.name if team else "?",
+            "team_color": team.color if team else "#aaa",
+            "participant_name": msg.sender_name or (team.name if team else "?"),
+            "source_label": f"Bericht – {team.name if team else '?'}",
+            "key": f"msg_{msg.id}",
+        })
+    # Submission photos (all statuses)
+    for sub in PhotoSubmission.query.order_by(PhotoSubmission.submitted_at).all():
+        team = Team.query.get(sub.team_id)
+        loc = Location.query.get(sub.location_id)
+        result.append({
+            "filename": sub.photo_filename,
+            "team_id": sub.team_id,
+            "team_name": team.name if team else "?",
+            "team_color": team.color if team else "#aaa",
+            "participant_name": sub.participant_name,
+            "source_label": f"Opdracht {loc.name if loc else '?'} – {team.name if team else '?'}",
+            "key": f"sub_{sub.id}",
+        })
+    return result
+
+
+def voting_status_dict(vs, vp_list, for_team_id=None):
+    """JSON-serialisable snapshot of the voting session."""
+    cur = VotingPhoto.query.get(vs.current_photo_id) if vs.current_photo_id else None
+    idx = next((i for i, vp in enumerate(vp_list) if vp.id == vs.current_photo_id), None)
+    result = {
+        "status": vs.status,
+        "total": len(vp_list),
+        "current_index": (idx + 1) if idx is not None else 0,
+        "current": None,
+        "results": [],
+    }
+    if cur:
+        can_vote = (
+            vs.status == "voting"
+            and for_team_id is not None
+            and cur.team_id != for_team_id
+        )
+        result["current"] = {
+            "id": cur.id,
+            "photo_url": url_for("uploaded_file", filename=cur.photo_filename),
+            "participant_name": cur.participant_name,
+            "source_label": cur.source_label,
+            "team_id": cur.team_id,
+            "vote_count": cur.vote_count,
+            "can_vote_if_eligible": can_vote,
+        }
+    if vs.status == "finished":
+        result["results"] = [
+            {
+                "id": vp.id,
+                "photo_url": url_for("uploaded_file", filename=vp.photo_filename),
+                "participant_name": vp.participant_name,
+                "source_label": vp.source_label,
+                "vote_count": vp.vote_count,
+            }
+            for vp in sorted(vp_list, key=lambda v: v.vote_count, reverse=True)
+        ]
+    return result
 
 
 def get_locations():
@@ -238,15 +369,27 @@ def make_balanced_groups(participants, num_groups):
     return groups
 
 
-def generate_routes(num_teams):
+def generate_routes(num_teams, num_stops=None):
+    """Geeft elk team een willekeurige volgorde van num_stops locaties.
+
+    Als num_stops >= aantal locaties krijgt elk team alle locaties in een
+    willekeurige volgorde. Anders krijgt elk team een willekeurige subset
+    van num_stops locaties, ook in willekeurige volgorde.
+    """
+    import random
     locations = get_locations()
     base = [loc.id for loc in locations]
     if not base:
         return [[] for _ in range(num_teams)]
+    if num_stops is None or num_stops <= 0:
+        num_stops = len(base)
+    num_stops = min(num_stops, len(base))
+
     routes = []
-    for i in range(num_teams):
-        rotated = base[i % len(base):] + base[: i % len(base)]
-        routes.append(rotated)
+    for _ in range(num_teams):
+        shuffled = base[:]
+        random.shuffle(shuffled)
+        routes.append(shuffled[:num_stops])
     return routes
 
 
@@ -272,10 +415,15 @@ def pending_submissions_count():
 def migrate_columns():
     """Add any missing columns that were added after initial DB creation."""
     with db.engine.connect() as conn:
-        # Check and add location.challenge_image
-        cols = [row[1] for row in conn.execute(db.text("PRAGMA table_info(location)"))]
-        if "challenge_image" not in cols:
+        # location.challenge_image
+        loc_cols = [row[1] for row in conn.execute(db.text("PRAGMA table_info(location)"))]
+        if "challenge_image" not in loc_cols:
             conn.execute(db.text("ALTER TABLE location ADD COLUMN challenge_image VARCHAR(200)"))
+            conn.commit()
+        # game_settings.num_stops
+        gs_cols = [row[1] for row in conn.execute(db.text("PRAGMA table_info(game_settings)"))]
+        if "num_stops" not in gs_cols:
+            conn.execute(db.text("ALTER TABLE game_settings ADD COLUMN num_stops INTEGER DEFAULT 3"))
             conn.commit()
 
 
@@ -303,6 +451,7 @@ with app.app_context():
     get_settings()
     seed_locations()
     migrate_routes()
+    get_voting_session()
 
 
 # ---------------------------------------------------------------------------
@@ -361,33 +510,107 @@ def admin_dashboard():
 
 
 # ---------------------------------------------------------------------------
-# Admin: upload CSV
+# Admin: upload CSV / Excel
 # ---------------------------------------------------------------------------
+
+def _parse_xlsx(stream):
+    """Leest een Google Forms Excel export. Geeft lijst van (full_name, club) of foutboodschap."""
+    import openpyxl, io
+    wb = openpyxl.load_workbook(io.BytesIO(stream.read()))
+    ws = wb.active
+
+    # Lees headers uit rij 1 (case-insensitive, gestript)
+    headers = []
+    for cell in ws[1]:
+        headers.append((cell.value or "").strip().lower())
+
+    # Zoek de juiste kolommen op naam
+    NAME_VARIANTS = {"naam & voornaam", "naam en voornaam", "naam &voornaam",
+                     "naam&voornaam", "naam", "voornaam", "name"}
+    CLUB_VARIANTS = {"leo club", "leoclub", "leo_club", "club"}
+
+    name_col = next((i for i, h in enumerate(headers) if h in NAME_VARIANTS), None)
+    club_col = next((i for i, h in enumerate(headers) if h in CLUB_VARIANTS), None)
+
+    if name_col is None:
+        return None, "Kolom 'Naam & Voornaam' niet gevonden. Gevonden koppen: " + ", ".join(headers)
+    if club_col is None:
+        return None, "Kolom 'Leo Club' niet gevonden. Gevonden koppen: " + ", ".join(headers)
+
+    participants, errors = [], []
+    for i, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+        name = str(row[name_col]).strip() if row[name_col] else ""
+        club = str(row[club_col]).strip() if row[club_col] else ""
+        if not name or name.lower() == "none":
+            errors.append(f"Rij {i}: lege naam, overgeslagen.")
+            continue
+        if not club or club.lower() == "none":
+            errors.append(f"Rij {i}: '{name}' heeft geen club, overgeslagen.")
+            continue
+        participants.append({"full_name": name, "club": club})
+
+    return participants, errors
+
+
+def _parse_csv(stream):
+    """Leest een CSV-bestand met voornaam/achternaam of naam + club kolommen."""
+    raw = stream.read().decode("utf-8-sig")
+    sample = raw[:2048]
+    delimiter = ";" if sample.count(";") > sample.count(",") else ","
+    reader = csv.DictReader(io.StringIO(raw), delimiter=delimiter)
+
+    participants, errors = [], []
+    for i, row in enumerate(reader, start=2):
+        row = {k.strip().lower(): (v.strip() if v else "") for k, v in row.items() if k}
+
+        # Support "Naam & Voornaam" als één kolom (Google Forms CSV export)
+        full_name_raw = (
+            row.get("naam & voornaam") or row.get("naam &voornaam") or
+            row.get("naam en voornaam") or row.get("naam&voornaam")
+        )
+        if full_name_raw:
+            full_name = full_name_raw
+        else:
+            first = (row.get("voornaam") or row.get("first_name") or
+                     row.get("firstname") or row.get("naam") or "")
+            last = (row.get("achternaam") or row.get("last_name") or
+                    row.get("lastname") or row.get("familienaam") or "")
+            full_name = f"{first} {last}".strip()
+
+        club = (row.get("leo club") or row.get("leoclub") or
+                row.get("club") or row.get("leo_club") or "")
+
+        if not full_name:
+            errors.append(f"Rij {i}: lege naam, overgeslagen.")
+            continue
+        if not club:
+            errors.append(f"Rij {i}: '{full_name}' heeft geen club, overgeslagen.")
+            continue
+        participants.append({"full_name": full_name, "club": club})
+
+    return participants, errors
+
 
 @app.route("/admin/upload", methods=["GET", "POST"])
 @admin_required
 def admin_upload():
     if request.method == "POST":
         f = request.files.get("csv_file")
-        if not f or not f.filename.endswith(".csv"):
-            flash("Gelieve een geldig CSV-bestand te uploaden.", "danger")
+        if not f or not f.filename:
+            flash("Geen bestand geselecteerd.", "danger")
             return redirect(url_for("admin_upload"))
 
-        raw = f.stream.read().decode("utf-8-sig")
-        sample = raw[:2048]
-        delimiter = ";" if sample.count(";") > sample.count(",") else ","
-        reader = csv.DictReader(io.StringIO(raw), delimiter=delimiter)
-
-        participants, errors = [], []
-        for i, row in enumerate(reader, start=2):
-            row = {k.strip().lower(): (v.strip() if v else "") for k, v in row.items() if k}
-            first = row.get("voornaam") or row.get("first_name") or row.get("firstname") or row.get("naam")
-            last = row.get("achternaam") or row.get("last_name") or row.get("lastname") or row.get("familienaam")
-            club = row.get("leoclub") or row.get("club") or row.get("leo_club")
-            if not first or not last or not club:
-                errors.append(f"Rij {i}: ontbrekende kolommen ({row})")
-                continue
-            participants.append({"first": first, "last": last, "club": club})
+        fname = f.filename.lower()
+        if fname.endswith(".xlsx"):
+            participants, errors = _parse_xlsx(f.stream)
+            if participants is None:
+                flash(f"❌ {errors}", "danger")
+                return redirect(url_for("admin_upload"))
+        elif fname.endswith(".csv"):
+            participants, errors = _parse_csv(f.stream)
+        else:
+            flash("Gelieve een .xlsx of .csv bestand te uploaden.", "danger")
+            return redirect(url_for("admin_upload"))
 
         for e in errors:
             flash(e, "warning")
@@ -395,6 +618,7 @@ def admin_upload():
             flash("Geen geldige deelnemers gevonden.", "danger")
             return redirect(url_for("admin_upload"))
 
+        # Reset game state
         Message.query.delete()
         PhotoSubmission.query.delete()
         Participant.query.delete()
@@ -404,7 +628,11 @@ def admin_upload():
         s.game_started = False
         s.game_started_at = None
         for p in participants:
-            db.session.add(Participant(first_name=p["first"], last_name=p["last"], club=p["club"]))
+            db.session.add(Participant(
+                first_name=p["full_name"],
+                last_name="",
+                club=p["club"],
+            ))
         db.session.commit()
         flash(f"✅ {len(participants)} deelnemers geladen.", "success")
         return redirect(url_for("admin_groups"))
@@ -436,7 +664,7 @@ def admin_groups():
         db.session.commit()
 
         groups = make_balanced_groups(participants, num_groups)
-        routes = generate_routes(num_groups)
+        routes = generate_routes(num_groups, num_stops=get_settings().num_stops)
         for i, (group, route) in enumerate(zip(groups, routes)):
             tc = TEAM_COLORS[i % len(TEAM_COLORS)]
             team = Team(
@@ -635,15 +863,27 @@ def admin_submissions_count():
 @admin_required
 def admin_settings():
     settings = get_settings()
+    locations = get_locations()
     if request.method == "POST":
+        changed = False
         new_pw = request.form.get("admin_password", "").strip()
         if new_pw:
             settings.admin_password = new_pw
+            changed = True
+
+        try:
+            ns = int(request.form.get("num_stops", settings.num_stops))
+            ns = max(1, min(ns, len(locations)))
+            if ns != settings.num_stops:
+                settings.num_stops = ns
+                changed = True
+        except (ValueError, TypeError):
+            flash("Ongeldig aantal stops.", "warning")
+
+        if changed:
             db.session.commit()
-            flash("✅ Wachtwoord gewijzigd.", "success")
-        else:
-            flash("Wachtwoord mag niet leeg zijn.", "warning")
-    return render_template("admin/settings.html", settings=settings)
+            flash("✅ Instellingen opgeslagen.", "success")
+    return render_template("admin/settings.html", settings=settings, locations=locations)
 
 
 # ---------------------------------------------------------------------------
@@ -894,6 +1134,8 @@ def participant_game_status():
         team_id=team.id, sender_type="admin", read_by_team=False
     ).count()
 
+    vs = get_voting_session()
+
     return jsonify({
         "game_started": settings.game_started,
         "current_step": team.current_step,
@@ -911,6 +1153,7 @@ def participant_game_status():
         "submission_status": submission_status,
         "submission_feedback": submission_feedback,
         "unread_messages": unread,
+        "voting_status": vs.status,
     })
 
 
@@ -1039,6 +1282,286 @@ def participant_send_message():
     db.session.add(msg)
     db.session.commit()
     return jsonify({"success": True, "message": msg.to_dict()})
+
+
+# ---------------------------------------------------------------------------
+# Admin: foto-galerij
+# ---------------------------------------------------------------------------
+
+@app.route("/admin/galerij")
+@admin_required
+def admin_galerij():
+    gallery = get_all_gallery_photos()
+    voting_photos = get_ordered_voting_photos()
+    in_voting = {vp.photo_filename: vp for vp in voting_photos}
+    return render_template(
+        "admin/galerij.html",
+        gallery=gallery,
+        voting_photos=voting_photos,
+        in_voting=in_voting,
+    )
+
+
+@app.route("/admin/galerij/toggle", methods=["POST"])
+@admin_required
+def admin_galerij_toggle():
+    filename = request.form.get("filename", "")
+    team_id = request.form.get("team_id", type=int)
+    participant_name = request.form.get("participant_name", "")
+    source_label = request.form.get("source_label", "")
+
+    existing = VotingPhoto.query.filter_by(photo_filename=filename).first()
+    if existing:
+        db.session.delete(existing)
+        db.session.commit()
+        return jsonify({"action": "removed"})
+    else:
+        max_order = db.session.query(db.func.max(VotingPhoto.order_index)).scalar() or -1
+        vp = VotingPhoto(
+            photo_filename=filename,
+            team_id=team_id or None,
+            participant_name=participant_name,
+            source_label=source_label,
+            order_index=max_order + 1,
+        )
+        db.session.add(vp)
+        db.session.commit()
+        return jsonify({"action": "added", "id": vp.id})
+
+
+@app.route("/admin/galerij/move/<int:vp_id>", methods=["POST"])
+@admin_required
+def admin_galerij_move(vp_id):
+    direction = request.form.get("direction")
+    photos = get_ordered_voting_photos()
+    idx = next((i for i, v in enumerate(photos) if v.id == vp_id), None)
+    if idx is None:
+        return jsonify({"ok": False})
+    if direction == "up" and idx > 0:
+        photos[idx].order_index, photos[idx - 1].order_index = \
+            photos[idx - 1].order_index, photos[idx].order_index
+    elif direction == "down" and idx < len(photos) - 1:
+        photos[idx].order_index, photos[idx + 1].order_index = \
+            photos[idx + 1].order_index, photos[idx].order_index
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+# ---------------------------------------------------------------------------
+# Admin: stemming
+# ---------------------------------------------------------------------------
+
+@app.route("/admin/stemming")
+@admin_required
+def admin_stemming():
+    vs = get_voting_session()
+    photos = get_ordered_voting_photos()
+    teams = {t.id: t for t in Team.query.all()}
+    return render_template(
+        "admin/stemming.html",
+        vs=vs, photos=photos, teams=teams,
+        MAX_VOTES=MAX_VOTES,
+        cur=VotingPhoto.query.get(vs.current_photo_id) if vs.current_photo_id else None,
+    )
+
+
+@app.route("/admin/stemming/preview", methods=["POST"])
+@admin_required
+def admin_stemming_start_preview():
+    photos = get_ordered_voting_photos()
+    if not photos:
+        flash("Selecteer eerst foto's in de galerij.", "warning")
+        return redirect(url_for("admin_stemming"))
+    vs = get_voting_session()
+    vs.status = "preview"
+    vs.current_photo_id = photos[0].id
+    vs.started_at = datetime.utcnow()
+    db.session.commit()
+    flash("▶️ Voorvertoning gestart.", "success")
+    return redirect(url_for("admin_stemming"))
+
+
+@app.route("/admin/stemming/startvoting", methods=["POST"])
+@admin_required
+def admin_stemming_start_voting():
+    photos = get_ordered_voting_photos()
+    if not photos:
+        flash("Geen foto's geselecteerd.", "warning")
+        return redirect(url_for("admin_stemming"))
+    vs = get_voting_session()
+    vs.status = "voting"
+    vs.current_photo_id = photos[0].id
+    db.session.commit()
+    flash("🗳️ Stemronde gestart!", "success")
+    return redirect(url_for("admin_stemming"))
+
+
+@app.route("/admin/stemming/navigate", methods=["POST"])
+@admin_required
+def admin_stemming_navigate():
+    direction = request.form.get("direction")  # 'next' or 'prev'
+    vs = get_voting_session()
+    photos = get_ordered_voting_photos()
+    if not photos or vs.status not in ("preview", "voting"):
+        return redirect(url_for("admin_stemming"))
+    ids = [p.id for p in photos]
+    cur_idx = ids.index(vs.current_photo_id) if vs.current_photo_id in ids else 0
+    if direction == "next" and cur_idx < len(ids) - 1:
+        vs.current_photo_id = ids[cur_idx + 1]
+    elif direction == "prev" and cur_idx > 0:
+        vs.current_photo_id = ids[cur_idx - 1]
+    db.session.commit()
+    return redirect(url_for("admin_stemming"))
+
+
+@app.route("/admin/stemming/finish", methods=["POST"])
+@admin_required
+def admin_stemming_finish():
+    vs = get_voting_session()
+    vs.status = "finished"
+    vs.finished_at = datetime.utcnow()
+    vs.current_photo_id = None
+    db.session.commit()
+    flash("🏆 Stemming afgesloten! Resultaten zijn zichtbaar.", "success")
+    return redirect(url_for("admin_stemming"))
+
+
+@app.route("/admin/stemming/reset", methods=["POST"])
+@admin_required
+def admin_stemming_reset():
+    vs = get_voting_session()
+    vs.status = "setup"
+    vs.current_photo_id = None
+    vs.started_at = None
+    vs.finished_at = None
+    Vote.query.delete()
+    db.session.commit()
+    flash("🔄 Stemming gereset.", "info")
+    return redirect(url_for("admin_stemming"))
+
+
+@app.route("/admin/stemming/beamer")
+@admin_required
+def admin_stemming_beamer():
+    return render_template("admin/stemming_beamer.html")
+
+
+@app.route("/admin/stemming/status")
+@admin_required
+def admin_stemming_status():
+    vs = get_voting_session()
+    photos = get_ordered_voting_photos()
+    data = voting_status_dict(vs, photos)
+    # Add per-photo vote counts for the control panel
+    data["photo_votes"] = {vp.id: vp.vote_count for vp in photos}
+    data["total_voters"] = Participant.query.filter_by(checked_in=True).count()
+    return jsonify(data)
+
+
+# ---------------------------------------------------------------------------
+# Participant: stemming
+# ---------------------------------------------------------------------------
+
+@app.route("/game/stemming")
+def participant_stemming():
+    token = session.get("participant_token")
+    if not token:
+        return redirect(url_for("participant_index"))
+    p = Participant.query.filter_by(session_token=token).first()
+    if not p:
+        return redirect(url_for("participant_index"))
+    vs = get_voting_session()
+    team = p.team
+    votes_used = Vote.query.filter_by(participant_id=p.id).count()
+    return render_template(
+        "participant/stemming.html",
+        participant=p, team=team,
+        vs=vs, MAX_VOTES=MAX_VOTES,
+        votes_used=votes_used,
+        votes_left=MAX_VOTES - votes_used,
+    )
+
+
+@app.route("/game/stemming/status")
+def participant_stemming_status():
+    token = session.get("participant_token")
+    if not token:
+        return jsonify({"error": "not_logged_in"}), 401
+    p = Participant.query.filter_by(session_token=token).first()
+    if not p:
+        return jsonify({"error": "no_participant"}), 400
+
+    vs = get_voting_session()
+    photos = get_ordered_voting_photos()
+    team_id = p.team.id if p.team else None
+    data = voting_status_dict(vs, photos, for_team_id=team_id)
+
+    votes_used = Vote.query.filter_by(participant_id=p.id).count()
+    data["votes_used"] = votes_used
+    data["votes_left"] = MAX_VOTES - votes_used
+
+    if data["current"] and vs.status == "voting":
+        cur_id = vs.current_photo_id
+        already_voted = Vote.query.filter_by(
+            participant_id=p.id, voting_photo_id=cur_id
+        ).first() is not None
+        is_own_team = (data["current"]["team_id"] == team_id)
+        data["current"]["already_voted"] = already_voted
+        data["current"]["is_own_team"] = is_own_team
+        data["current"]["can_vote"] = (
+            data["current"]["can_vote_if_eligible"]
+            and not already_voted
+            and votes_used < MAX_VOTES
+        )
+    return jsonify(data)
+
+
+@app.route("/game/stemming/vote", methods=["POST"])
+def participant_stemming_vote():
+    token = session.get("participant_token")
+    if not token:
+        return jsonify({"success": False, "message": "Niet ingelogd."}), 401
+    p = Participant.query.filter_by(session_token=token).first()
+    if not p:
+        return jsonify({"success": False, "message": "Deelnemer niet gevonden."}), 400
+
+    vs = get_voting_session()
+    if vs.status != "voting":
+        return jsonify({"success": False, "message": "Stemronde is niet actief."}), 400
+
+    voting_photo_id = vs.current_photo_id
+    if not voting_photo_id:
+        return jsonify({"success": False, "message": "Geen actieve foto."}), 400
+
+    vp = VotingPhoto.query.get(voting_photo_id)
+    if not vp:
+        return jsonify({"success": False, "message": "Foto niet gevonden."}), 400
+
+    team_id = p.team.id if p.team else None
+    if vp.team_id and vp.team_id == team_id:
+        return jsonify({"success": False,
+                        "message": "Je mag niet stemmen op een foto van je eigen team."}), 400
+
+    votes_used = Vote.query.filter_by(participant_id=p.id).count()
+    if votes_used >= MAX_VOTES:
+        return jsonify({"success": False, "message": "Je hebt geen stemmen meer over."}), 400
+
+    already = Vote.query.filter_by(
+        participant_id=p.id, voting_photo_id=voting_photo_id
+    ).first()
+    if already:
+        return jsonify({"success": False, "message": "Je hebt al op deze foto gestemd."}), 400
+
+    db.session.add(Vote(participant_id=p.id, voting_photo_id=voting_photo_id))
+    db.session.commit()
+
+    votes_left = MAX_VOTES - votes_used - 1
+    return jsonify({
+        "success": True,
+        "votes_left": votes_left,
+        "vote_count": vp.vote_count,
+        "message": f"❤️ Stem uitgebracht! Nog {votes_left} {'stem' if votes_left == 1 else 'stemmen'} over.",
+    })
 
 
 @app.route("/game/logout")

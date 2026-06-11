@@ -1,23 +1,30 @@
 {% extends "base_admin.html" %}
-{% block title %}CSV uploaden – Stadsspel Aalst{% endblock %}
+{% block title %}Deelnemers uploaden – Stadsspel Aalst{% endblock %}
 
 {% block content %}
-<h2 class="fw-bold mb-1">CSV uploaden</h2>
-<p class="text-muted mb-4">Laad de lijst met deelnemers vanuit een CSV-bestand.</p>
+<h2 class="fw-bold mb-1">Deelnemers uploaden</h2>
+<p class="text-muted mb-4">Laad de deelnemerslijst vanuit een Google Forms Excel-export (.xlsx) of een CSV-bestand.</p>
 
 <div class="row g-4">
   <div class="col-lg-7">
     <div class="card">
       <div class="card-body p-4">
-        <h5 class="fw-semibold mb-3"><i class="bi bi-file-earmark-spreadsheet me-2 text-primary"></i>Bestand kiezen</h5>
+        <h5 class="fw-semibold mb-3">
+          <i class="bi bi-file-earmark-spreadsheet me-2 text-primary"></i>Bestand kiezen
+        </h5>
         <form method="POST" enctype="multipart/form-data">
           <div class="mb-4">
-            <label class="form-label fw-semibold">CSV-bestand</label>
-            <input type="file" name="csv_file" accept=".csv" class="form-control form-control-lg" required>
-            <div class="form-text">Maximale bestandsgrootte: 5 MB. Ondersteunde scheidingstekens: komma of puntkomma.</div>
+            <label class="form-label fw-semibold">Excel- of CSV-bestand</label>
+            <input type="file" name="csv_file" accept=".xlsx,.csv"
+                   class="form-control form-control-lg" required>
+            <div class="form-text mt-1">
+              <span class="badge bg-success me-1">Aanbevolen</span>
+              Exporteer rechtstreeks vanuit Google Forms als <strong>.xlsx</strong>.
+              Ook <strong>.csv</strong> (komma of puntkomma) wordt ondersteund.
+            </div>
           </div>
           <button type="submit" class="btn btn-primary btn-lg px-5 fw-semibold">
-            <i class="bi bi-upload me-2"></i>Uploaden
+            <i class="bi bi-upload me-2"></i>Uploaden &amp; importeren
           </button>
         </form>
       </div>
@@ -27,30 +34,82 @@
   <div class="col-lg-5">
     <div class="card h-100">
       <div class="card-body p-4">
-        <h5 class="fw-semibold mb-3"><i class="bi bi-info-circle me-2 text-info"></i>Vereist formaat</h5>
-        <p class="text-muted small mb-3">Het CSV-bestand moet de volgende kolommen bevatten (kolomnamen zijn flexibel):</p>
+        <h5 class="fw-semibold mb-3">
+          <i class="bi bi-info-circle me-2 text-info"></i>Verwacht formaat
+        </h5>
 
-        <div class="table-responsive">
-          <table class="table table-sm table-bordered">
-            <thead class="table-light">
-              <tr>
-                <th>Voornaam</th>
-                <th>Achternaam</th>
-                <th>LeoClub</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr><td>Jan</td><td>Janssen</td><td>Leo Aalst</td></tr>
-              <tr><td>Marie</td><td>Pieters</td><td>Leo Gent</td></tr>
-              <tr><td>Lore</td><td>De Smet</td><td>Leo Brussel</td></tr>
-            </tbody>
-          </table>
+        <!-- Excel tab -->
+        <ul class="nav nav-pills mb-3" id="formatTabs">
+          <li class="nav-item">
+            <button class="nav-link active" onclick="showTab('xlsx', this)">
+              <i class="bi bi-file-earmark-excel me-1"></i>.xlsx (Google Forms)
+            </button>
+          </li>
+          <li class="nav-item">
+            <button class="nav-link" onclick="showTab('csv', this)">
+              <i class="bi bi-filetype-csv me-1"></i>.csv
+            </button>
+          </li>
+        </ul>
+
+        <div id="tab-xlsx">
+          <p class="text-muted small mb-2">
+            Download de antwoorden rechtstreeks uit Google Forms als Excel.
+            Het platform leest automatisch de kolommen <code>Naam &amp; Voornaam</code>
+            en <code>Leo Club</code>:
+          </p>
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered">
+              <thead class="table-light">
+                <tr>
+                  <th class="text-muted" style="font-size:.75rem;">Tijdstempel</th>
+                  <th class="table-success">Naam &amp; Voornaam</th>
+                  <th class="table-success">Leo Club</th>
+                  <th class="text-muted" style="font-size:.75rem;">…</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="text-muted small">27/05/2026</td>
+                  <td>Fréderic Meuleman</td>
+                  <td>Aalst</td>
+                  <td class="text-muted small">…</td>
+                </tr>
+                <tr>
+                  <td class="text-muted small">27/05/2026</td>
+                  <td>Arnaud Gyselinck</td>
+                  <td>Aalst</td>
+                  <td class="text-muted small">…</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="alert alert-success py-2 px-3 small mb-0">
+            <i class="bi bi-check-circle me-1"></i>
+            Andere kolommen (tijdstempel, e-mail, betaling…) worden automatisch genegeerd.
+          </div>
         </div>
 
-        <div class="mt-3">
-          <p class="small fw-semibold mb-2">Ondersteunde kolomnamen:</p>
-          <div class="d-flex flex-wrap gap-1">
-            {% for name in ["voornaam", "first_name", "naam", "achternaam", "last_name", "familienaam", "leoclub", "club", "leo_club"] %}
+        <div id="tab-csv" style="display:none;">
+          <p class="text-muted small mb-2">
+            CSV met aparte voor- en achternaam, of één <code>Naam &amp; Voornaam</code> kolom:
+          </p>
+          <div class="table-responsive mb-2">
+            <table class="table table-sm table-bordered">
+              <thead class="table-light">
+                <tr><th>voornaam</th><th>achternaam</th><th>leoclub</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Jan</td><td>Janssen</td><td>Leo Aalst</td></tr>
+                <tr><td>Marie</td><td>Pieters</td><td>Leo Gent</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="small fw-semibold mb-1">Ondersteunde kolomnamen:</p>
+          <div class="d-flex flex-wrap gap-1 mb-0">
+            {% for name in ["naam & voornaam", "voornaam", "first_name", "naam",
+                             "achternaam", "last_name", "familienaam",
+                             "leo club", "leoclub", "club"] %}
             <code class="bg-light px-2 py-1 rounded small">{{ name }}</code>
             {% endfor %}
           </div>
@@ -66,16 +125,15 @@
     </div>
   </div>
 </div>
+{% endblock %}
 
-<div class="mt-4 p-3 bg-light rounded-3 border">
-  <h6 class="fw-semibold mb-2"><i class="bi bi-download me-2"></i>Voorbeeldbestand downloaden</h6>
-  <p class="text-muted small mb-2">Gebruik dit als sjabloon voor je eigen CSV-bestand:</p>
-  <pre class="mb-0 small bg-white border rounded p-3">voornaam;achternaam;leoclub
-Jan;Janssen;Leo Aalst
-Marie;Pieters;Leo Gent
-Lore;De Smet;Leo Brussel
-Pieter;Claes;Leo Antwerpen
-Sara;Vermeersch;Leo Gent
-Tom;Bogaert;Leo Aalst</pre>
-</div>
+{% block scripts %}
+<script>
+function showTab(name, btn) {
+  document.getElementById('tab-xlsx').style.display = name === 'xlsx' ? 'block' : 'none';
+  document.getElementById('tab-csv').style.display  = name === 'csv'  ? 'block' : 'none';
+  document.querySelectorAll('#formatTabs .nav-link').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+</script>
 {% endblock %}
