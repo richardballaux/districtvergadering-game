@@ -13,15 +13,22 @@ from flask import (Flask, flash, jsonify, redirect, render_template,
 from flask_sqlalchemy import SQLAlchemy
 from PIL import Image
 
-from game_content import FINISH_MESSAGE, LOCATIONS as DEFAULT_LOCATIONS, TEAM_COLORS
+from game_content import FINISH_MESSAGE, DEFAULT_LOCATIONS, TEAM_COLORS
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "districtvergadering-leos-2024")
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///game.db"
+
+# DATA_DIR: op Render wijst dit naar de persistent disk (/data).
+# Lokaal wordt de projectmap gebruikt.
+DATA_DIR = os.environ.get("DATA_DIR", os.path.dirname(__file__))
+os.makedirs(DATA_DIR, exist_ok=True)
+
+DB_PATH = os.path.join(DATA_DIR, "game.db")
+app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{DB_PATH}"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
 
-UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), "static", "uploads")
+UPLOAD_FOLDER = os.path.join(DATA_DIR, "uploads")
 ALLOWED_PHOTO_EXTENSIONS = {"jpg", "jpeg", "png", "gif", "webp", "heic", "heif"}
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
@@ -314,21 +321,65 @@ def get_locations():
     return Location.query.order_by(Location.order_index).all()
 
 
+def _copy_seed_image(seed_filename):
+    """Kopieer een seed-afbeelding naar uploads/ als die nog niet bestaat.
+    Geeft de filename terug die in de DB opgeslagen wordt."""
+    if not seed_filename:
+        return None
+    src = os.path.join(os.path.dirname(__file__), "static", "seed_images", seed_filename)
+    if not os.path.exists(src):
+        return None
+    dest = os.path.join(UPLOAD_FOLDER, seed_filename)
+    if not os.path.exists(dest):
+        import shutil
+        shutil.copy2(src, dest)
+    return seed_filename
+
+
 def seed_locations():
-    """Seed default locations from game_content.py if DB is empty."""
-    if Location.query.count() == 0:
-        for i, loc in enumerate(DEFAULT_LOCATIONS):
-            db.session.add(Location(
-                order_index=i,
-                name=loc["name"],
-                emoji=loc["emoji"],
-                clue=loc["clue"],
-                challenge=loc["challenge"],
-                arrival_hint=loc.get("arrival_hint", ""),
-                answer_type="code",
-                secret_code=f"CODE{i + 1}",
-            ))
+    """Seed locaties vanuit game_content.py.
+
+    - Als de DB leeg is: alles aanmaken.
+    - Als het aantal locaties in de DB afwijkt van DEFAULT_LOCATIONS: alles
+      vervangen (alleen als er geen actief spel bezig is).
+    """
+    existing = Location.query.count()
+    expected = len(DEFAULT_LOCATIONS)
+
+    if existing == expected:
+        # Bestaande locaties: zorg wel dat seed-images aanwezig zijn in uploads/
+        for loc in Location.query.all():
+            seed = next(
+                (d.get("seed_image") for d in DEFAULT_LOCATIONS if d["name"] == loc.name),
+                None,
+            )
+            if seed:
+                _copy_seed_image(seed)
+        return
+
+    # Leeg of ander aantal → opnieuw seeden (alleen als spel niet bezig is)
+    settings = get_settings()
+    if existing > 0 and settings.game_started:
+        return  # Spel loopt, niet wissen
+
+    if existing > 0:
+        Location.query.delete()
         db.session.commit()
+
+    for i, loc in enumerate(DEFAULT_LOCATIONS):
+        challenge_image = _copy_seed_image(loc.get("seed_image"))
+        db.session.add(Location(
+            order_index=i,
+            name=loc["name"],
+            emoji=loc["emoji"],
+            clue="",
+            challenge=loc["challenge"],
+            arrival_hint=loc.get("arrival_hint", ""),
+            answer_type=loc.get("answer_type", "code"),
+            secret_code=loc.get("secret_code", f"CODE{i + 1}"),
+            challenge_image=challenge_image,
+        ))
+    db.session.commit()
 
 
 def get_local_ip():
