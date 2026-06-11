@@ -402,45 +402,79 @@ def admin_required(f):
 
 
 def make_balanced_groups(participants, num_groups):
+    """Verdeel deelnemers over teams zodat clubs maximaal gemengd zijn.
+
+    Strategie (greedy):
+    - Ga round-robin door de teams (0, 1, 2, ..., N-1, 0, 1, ...).
+    - Kies voor elk team de persoon van de club die al het minst
+      vertegenwoordigd is in dat team. Bij gelijkspel: kies van de
+      grootste club (zodat die als eerste gespreid wordt).
+    """
+    from collections import defaultdict
+
     by_club = {}
     for p in participants:
         by_club.setdefault(p.club, []).append(p)
-    for club in by_club:
-        random.shuffle(by_club[club])
-    clubs_sorted = sorted(by_club.values(), key=len, reverse=True)
-    flat = []
-    while any(clubs_sorted):
-        for club_members in clubs_sorted:
-            if club_members:
-                flat.append(club_members.pop(0))
-        clubs_sorted = [c for c in clubs_sorted if c]
+    for members in by_club.values():
+        random.shuffle(members)
+
+    club_sizes = {club: len(members) for club, members in by_club.items()}
+
+    # Pool gesorteerd op clubgrootte desc (zodat grote clubs als eerste verspreid worden)
+    pool = []
+    for club, members in sorted(by_club.items(), key=lambda x: -len(x[1])):
+        pool.extend(members)
+
     groups = [[] for _ in range(num_groups)]
-    for i, p in enumerate(flat):
-        groups[i % num_groups].append(p)
+    club_in_team = [defaultdict(int) for _ in range(num_groups)]
+    team = 0
+
+    while pool:
+        # Beste persoon voor dit team: club die het minst vertegenwoordigd is;
+        # bij gelijkspel de grootste club eerst.
+        best_idx = min(
+            range(len(pool)),
+            key=lambda i: (
+                club_in_team[team][pool[i].club],  # liefst club die nog niet in dit team zit
+                -club_sizes[pool[i].club],          # anders: grootste club voorrang
+            ),
+        )
+        person = pool.pop(best_idx)
+        groups[team].append(person)
+        club_in_team[team][person.club] += 1
+        team = (team + 1) % num_groups
+
     return groups
 
 
 def generate_routes(num_teams, num_stops=None):
-    """Geeft elk team een willekeurige volgorde van num_stops locaties.
+    """Geeft elk team een route van num_stops locaties, maximaal verspreid.
 
-    Als num_stops >= aantal locaties krijgt elk team alle locaties in een
-    willekeurige volgorde. Anders krijgt elk team een willekeurige subset
-    van num_stops locaties, ook in willekeurige volgorde.
+    Aanpak (rotatie / Latin rectangle):
+    - Schud de locaties willekeurig door elkaar.
+    - Elk team t start op offset (t % num_locs) in die geschudde lijst
+      en bezoekt num_stops opeenvolgende locaties (met wrap-around).
+    - Garantie: op elk tijdstip staan maximaal ceil(num_teams / num_locs)
+      teams tegelijk op dezelfde locatie — het wiskundig optimum.
     """
-    import random
     locations = get_locations()
-    base = [loc.id for loc in locations]
-    if not base:
+    loc_ids = [loc.id for loc in locations]
+    if not loc_ids:
         return [[] for _ in range(num_teams)]
+
+    num_locs = len(loc_ids)
     if num_stops is None or num_stops <= 0:
-        num_stops = len(base)
-    num_stops = min(num_stops, len(base))
+        num_stops = num_locs
+    num_stops = min(num_stops, num_locs)
+
+    # Schud locaties zodat de verdeling elke keer anders is
+    random.shuffle(loc_ids)
 
     routes = []
-    for _ in range(num_teams):
-        shuffled = base[:]
-        random.shuffle(shuffled)
-        routes.append(shuffled[:num_stops])
+    for t in range(num_teams):
+        offset = t % num_locs          # elk team een ander startpunt
+        route = [loc_ids[(offset + s) % num_locs] for s in range(num_stops)]
+        routes.append(route)
     return routes
 
 
